@@ -1,0 +1,18 @@
+node_modules/
+.cache/
+validation/
+
+# Local maps, personal flight recordings, and distribution archives
+*.pmtiles
+*.igc
+*.IGC
+*.zip
+skytraxx*/
+
+# Local credentials and machine settings
+.env
+.env.*
+!.env.example
+.aws/
+.codex/
+*.log

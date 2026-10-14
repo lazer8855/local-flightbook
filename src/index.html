@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; worker-src blob:; style-src 'unsafe-inline'; font-src data:; img-src data: blob:; connect-src blob:;">
+  <title>Flightbook · Local prototype</title>
+  <style>/* BUNDLED_STYLES */
+  [hidden]{display:none!important}
+  </style>
+</head>
+<body>
+  <header><div class="brand"><span class="brand-mark">↗</span><div><strong>Flightbook</strong><small>Your flights. Your computer.</small></div></div><div class="header-actions"><span class="badge">Local prototype</span><button id="theme" class="secondary" aria-label="Switch colour theme">Dark theme</button></div></header>
+  <main>
+    <section class="welcome panel">
+      <div><p class="eyebrow">A little closer to the sky</p><h1>Your flying story, in one place.</h1><p class="muted">Open local tracks and explore them on a local Europe map. No account, API key, or server.</p></div>
+      <div class="instructions"><h2>Connect your files</h2><ol><li>Use desktop <strong>Chrome or Edge</strong> and click <strong>Choose flight folder</strong>.</li><li>Select the main folder containing your flights and approve read access. Every subfolder is scanned, whatever its name.</li><li>Click <strong>Choose Europe map</strong> and select <strong>europe.pmtiles</strong>.</li><li>For a manual flight, choose its save location and approve write access if asked.</li></ol><p class="muted">Repeat these selections after reopening. Your IGC files are never changed.</p></div>
+    </section>
+    <section class="toolbar" aria-label="File controls"><button id="folder">Choose flight folder</button><button id="rescan" class="secondary" disabled>Rescan folder</button><button id="choose-map" class="secondary">Choose Europe map</button><button id="choose-terrain" class="secondary">Choose Alps terrain</button><button id="add-manual" class="secondary">+ Manual flight</button><input id="map-file" type="file" accept=".pmtiles" hidden><input id="terrain-file" type="file" accept=".pmtiles" hidden></section>
+    <p id="status" role="status" aria-live="polite">Choose a folder to get started. The dashboard makes no internet requests.</p>
+    <section class="stats" aria-label="Flight summary"><div class="panel"><small>Flights loaded</small><strong id="flight-count">0</strong></div><div class="panel"><small>Recorded time</small><strong id="airtime">—</strong></div><div class="panel"><small>Years represented</small><strong id="years">—</strong></div><div class="panel"><small>Needs review</small><strong id="review-count">0</strong></div></section>
+    <section class="statistics-section" aria-label="Yearly and monthly statistics">
+      <div class="statistics-heading"><div><p class="eyebrow">Time in the sky</p><h2 id="stats-period">Your flying, across the years</h2></div><div class="statistics-filters"><label>Year<select id="stats-year"><option value="">All years</option></select></label><label>Month<select id="stats-month" disabled><option value="">All months</option></select></label><button id="stats-reset" class="secondary">All-time overview</button></div></div>
+      <p id="statistics-empty" class="muted">Connect your flight folder to explore annual totals, monthly activity, and comparisons.</p>
+      <div id="statistics-content" hidden>
+        <div id="statistics-cards" class="statistics-cards"></div>
+        <div class="chart-controls"><label>Chart metric<select id="stats-metric"><option value="durationSeconds">Recorded time</option><option value="count">Flights</option><option value="distanceKm">GPS track distance</option><option value="flyingDays">Flying days</option></select></label><span class="muted">Select a year or month to filter the flight library below.</span></div>
+        <div class="statistics-charts"><article class="panel chart-panel"><h2 id="annual-heading">Recorded time by year</h2><p id="annual-caption" class="muted"></p><div id="annual-chart"></div></article><article class="panel chart-panel"><h2 id="monthly-heading">Your typical month</h2><p id="monthly-caption" class="muted"></p><div id="monthly-legend" class="chart-legend" hidden><span><i class="selected-bar"></i><span id="legend-selected"></span></span><span><i class="previous-bar"></i><span id="legend-previous"></span></span><span><i class="median-bar"></i>Median</span></div><div id="monthly-chart"></div></article></div>
+        <details class="statistics-method"><summary>How comparisons are calculated</summary><p id="statistics-note" class="muted"></p></details>
+      </div>
+    </section>
+    <section class="workspace"><div class="panel flight-panel"><div class="panel-heading"><h2>Flight library</h2><span id="folder-name" class="muted">No folder connected</span></div><p id="library-period" class="library-period">All flights</p><label class="search-label">Filter flights<input id="search" type="search" placeholder="Date, site, wing, or filename"></label>
+      <details class="flight-filters" open><summary>Duration & XC filters</summary><div class="filter-grid">
+        <label>Min duration (min)<input id="duration-min" type="number" min="0" step="any" placeholder="Any"></label><label>Max duration (min)<input id="duration-max" type="number" min="0" step="any" placeholder="Any"></label>
+        <label>XC distance type<select id="xc-type"><option value="open">Open XC</option><option value="triangle">Free triangle</option><option value="fai">FAI triangle</option></select></label><label>Sort flights<select id="flight-sort"><option value="date">Newest first</option><option value="duration">Longest first</option><option value="xc">Longest XC first</option></select></label>
+        <label>Min XC (km)<input id="xc-min" type="number" min="0" step="any" placeholder="Any"></label><label>Max XC (km)<input id="xc-max" type="number" min="0" step="any" placeholder="Any"></label>
+      </div><button id="clear-filters" class="secondary" type="button">Clear library filters</button></details>
+      <p id="filter-summary" class="filter-summary" role="status">Filters apply to the library and map; statistics use year/month.</p><p id="xc-status" class="filter-summary" role="status">XC distances are calculated locally after loading flights.</p>
+      <details class="xc-method"><summary>How XC distances are calculated</summary><p>Open XC optimizes start, up to three turnpoints and finish. Free triangles require a closing gap within 20% of the perimeter; FAI triangles also require each leg to be at least 28% of the perimeter. Triangle distances subtract the closing gap. Calculations use all valid fixes with WGS84 distances and no automatic launch/landing trimming. ≈ marks a time-limited estimate; Refine XC distances searches longer. Not found yet is not proof that no triangle exists. Manual flights have no XC distance. These are local distance estimates, not official contest scores.</p><p><a href="https://www.xcontest.org/world/en/rules/" target="_blank" rel="noopener">XContest rules</a> · <a href="https://github.com/mmomtchev/igc-xc-score" target="_blank" rel="noopener">XC optimizer</a></p></details>
+      <div id="flight-list" class="flight-list"><p class="empty">Your flights will appear here.</p></div></div><div id="map-panel" class="panel map-panel" aria-label="Flight explorer">
+      <div class="panel-heading"><h2>Flight explorer</h2><div class="map-actions"><button id="map-3d" class="secondary" disabled aria-pressed="false" title="Choose Alps terrain to enable 3D">3D view</button><button id="fit" class="secondary" disabled>Fit track</button><button id="map-expand" class="secondary" aria-expanded="false" aria-controls="map-panel">Full window</button></div></div>
+      <div class="map-view-controls"><label>Map view<select id="map-mode"><option value="single">Selected flight</option><option value="tracks">All tracks</option><option value="heat">Heatmap</option></select></label><div id="heatmap-legend" class="heatmap-legend" hidden><span>Fewer flights</span><i></i><span>More flights</span></div></div>
+      <p id="map-view-status" class="map-caption" role="status">Choose a map view to explore your flights.</p>
+      <p id="three-d-status" class="map-caption" hidden>3D: selected flight at GPS altitude; terrain at actual height. Right-drag to tilt and rotate; compass resets north. All tracks and Heatmap stay on the ground. GPS/elevation differences may place near-ground fixes below the surface. Outside Alps coverage the terrain is flat.</p>
+      <div id="rate-legend" class="rate-legend" hidden><div><span>Sink −3 m/s</span><i></i><span>Climb +3 m/s</span></div><small id="rate-source"></small></div>
+      <div class="terrain-controls"><label><input id="terrain-shading" type="checkbox" checked disabled> Terrain shading</label><label><input id="terrain-contours" type="checkbox" checked disabled> Contours</label></div>
+      <p id="terrain-status" class="map-caption" role="status">Optional: choose terrain-alps.pmtiles for local hill shading and height lines. Terrain covers Switzerland and the Alpine arc; reselect it after reopening.</p>
+      <div id="map"></div><p id="map-status" class="map-caption">Connect europe.pmtiles for the background. Tracks can be viewed without it.</p><div id="flight-detail" class="flight-detail"><p class="muted">Select a flight to see its track and recording details.</p></div>
+    </div></section>
+    <details class="panel review-panel"><summary id="review-summary">Import details and review</summary><div id="issues"></div></details>
+    <footer>Prototype validation · GPS track length and XC distance are shown separately. XC estimates use XContest-style geometry; no official contest validation. Recorded time includes any waiting captured by the logger.</footer>
+  </main>
+  <dialog id="manual-dialog"><form id="manual-form"><div class="panel-heading"><h2>Add a manual flight</h2><button type="button" id="close-manual" class="secondary">Close</button></div><p class="muted">Save a flightbook JSON file anywhere inside your connected flight folder, then rescan to load it.</p><label>Flight date<input name="date" type="date" required></label><label>Duration (minutes)<input name="durationMinutes" type="number" min="0.1" step="0.1" required></label><label>Flying site<input name="site" maxlength="200"></label><label>Wing<input name="wing" maxlength="200"></label><label>Notes<textarea name="notes" rows="3" maxlength="5000"></textarea></label><p id="save-status" role="status"></p><button type="submit" id="save-manual">Choose location & save JSON</button></form></dialog>
+  <script>/* BUNDLED_APP */</script>
+</body>
+</html>

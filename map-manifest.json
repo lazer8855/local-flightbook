@@ -1,0 +1,22 @@
+{
+  "file": "europe.pmtiles",
+  "source": "https://build.protomaps.com/20261012.pmtiles",
+  "sourceBuildDate": "2026-10-12",
+  "sourceBasemapVersion": "4.15.2",
+  "sourceOSMReplicationTime": "2026-10-12T04:00:00Z",
+  "sourcePlanetBlake3": "2f8c16cd456121112bdeab0dd9c122c4242ac9e0cec4e171c4f6d866e5825d65",
+  "extractTool": "go-pmtiles 1.31.2",
+  "bounds": [-25, 34, 45, 72],
+  "minZoom": 0,
+  "maxZoom": 10,
+  "bytes": 1375193610,
+  "sha256": "72395e122deae345332f52facef7c1b48e347a537dd331b84d3c74be5b4b4238",
+  "addressedTiles": 53650,
+  "tileEntries": 37320,
+  "distinctTileContents": 29335,
+  "format": "PMTiles v3 / MVT / gzip",
+  "attribution": "© OpenStreetMap contributors · Natural Earth · Protomaps",
+  "license": "Protomaps basemap distributed as an ODbL Produced Work; OpenStreetMap attribution required",
+  "documentation": "https://docs.protomaps.com/basemaps/downloads",
+  "notes": "Bounds select intersecting tiles, not exact geometry clipping. At low zoom, tiles contain context outside Europe. No elevation, hillshade, satellite imagery, or detailed hiking paths are promised."
+}

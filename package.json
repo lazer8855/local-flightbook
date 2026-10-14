@@ -1,0 +1,22 @@
+{
+  "name": "local-flightbook-prototype",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "test:browser": "node scripts/validate-browser.mjs"
+  },
+  "dependencies": {
+    "@fontsource/noto-sans": "5.3.0",
+    "igc-xc-score": "1.8.0",
+    "maplibre-contour": "0.1.1",
+    "maplibre-gl": "6.14.0",
+    "pmtiles": "4.5.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12",
+    "playwright": "1.58.2"
+  }
+}
