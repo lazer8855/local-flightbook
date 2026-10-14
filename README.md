@@ -4,19 +4,30 @@ Double-click **dashboard.html** in desktop Chrome or Edge. No running server,
 Node installation, account, internet connection, or API key is needed to use it.
 If another browser is your default, right-click the HTML and use **Open with**.
 
-Download the [first beta release](https://github.com/lazer8855/local-flightbook/releases/tag/v0.1.0-beta.1):
+Download the [latest beta release](https://github.com/lazer8855/local-flightbook/releases/tag/v0.1.0-beta.2):
 
-- [dashboard.html](https://github.com/lazer8855/local-flightbook/releases/download/v0.1.0-beta.1/dashboard.html) — the standalone dashboard.
-- [europe.pmtiles](https://github.com/lazer8855/local-flightbook/releases/download/v0.1.0-beta.1/europe.pmtiles) — Europe background map, 1.38 GB.
-- [terrain-alps.pmtiles](https://github.com/lazer8855/local-flightbook/releases/download/v0.1.0-beta.1/terrain-alps.pmtiles) — optional Alpine elevation for shading, contours and 3D, 1.59 GB.
+- [dashboard.html](https://github.com/lazer8855/local-flightbook/releases/download/v0.1.0-beta.2/dashboard.html) — the standalone dashboard.
+- [europe.pmtiles](https://github.com/lazer8855/local-flightbook/releases/download/v0.1.0-beta.2/europe.pmtiles) — Europe background map, 1.38 GB.
+- [terrain-alps.pmtiles](https://github.com/lazer8855/local-flightbook/releases/download/v0.1.0-beta.2/terrain-alps.pmtiles) — optional Alpine elevation for shading, contours and 3D, 1.59 GB.
 
 Map archives are release assets and are not included in a Git clone or the source-code ZIP. Checksums, map provenance and attribution are attached to the release. Downloading requires internet; using the downloaded dashboard and maps works offline.
 
-The current local dashboard also supports the Switzerland and world maps and
-worldwide terrain listed below. These additional archives have been generated
-locally and are not yet included in the linked beta release. The beta dashboard
-uses **Choose Europe map** and **Choose Alps terrain**; use the updated local
-`dashboard.html` for the **Choose map** and **Choose terrain** controls.
+The beta includes every map listed below. Europe, Switzerland and Alpine terrain
+are direct PMTiles downloads. GitHub's per-asset size limit requires the two
+world archives to be supplied as numbered parts. Download both parts of the
+desired world archive and `join-world-maps.ps1` into one folder, then run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\join-world-maps.ps1 -Map world
+powershell -ExecutionPolicy Bypass -File .\join-world-maps.ps1 -Map terrain-world
+```
+
+The script reconstructs the original PMTiles file and checks its SHA-256;
+existing output files are never overwritten. Use the reconstructed file with
+**Choose map** or **Choose terrain**. On macOS/Linux, concatenate each archive's
+`.part01` then `.part02` with `cat` and verify against `SHA256SUMS.txt`.
+Parts can be deleted after successful reconstruction. Allow disk space for both
+the downloaded parts and the reconstructed map during this step.
 
 | File | Coverage | Maximum zoom | Size | Features |
 | --- | --- | --- | --- | --- |
@@ -94,7 +105,7 @@ powershell -File scripts/prepare-map.ps1 -Map world
 Add `-PMTilesExecutable <path>` when the tool is not in `.cache/pmtiles-tool/`.
 The script refuses to overwrite existing archives and verifies structure,
 checksums, and the world's size limit. `-Map europe` remains the default.
-These new local files are not yet assets of the linked beta release.
+All map packages are included in the linked beta release.
 
 ## Map detail
 
@@ -134,7 +145,7 @@ archive. The source ETag matches the existing Alps terrain source. Recreate it
 with `powershell -File scripts/prepare-terrain.ps1 -Map world`, adding
 `-PMTilesExecutable <path>` if needed. The script refuses to overwrite an
 existing archive and verifies source ETag, size limit, structure, and checksum.
-The new file is local and has not been published to the linked beta release.
+This terrain package is included in the linked beta release as two parts.
 
 ## Alps terrain
 
@@ -206,8 +217,7 @@ cannot be overwritten. Files are rescanned after saving.
 
 ## Shared dashboard and statistics
 
-This redesign is available in the local build/source; the linked first beta
-release has not been replaced or republished.
+This redesign is included in beta 2 and the current source build.
 
 **Flightbook** presents a compact airtime summary, flight library and map.
 **Statistics** presents four equal cells for flights, recorded airtime, average
