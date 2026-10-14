@@ -4,6 +4,14 @@ Double-click **dashboard.html** in desktop Chrome or Edge. No running server,
 Node installation, account, internet connection, or API key is needed to use it.
 If another browser is your default, right-click the HTML and use **Open with**.
 
+Download the [first beta release](https://github.com/lazer8855/local-flightbook/releases/tag/v0.1.0-beta.1):
+
+- [dashboard.html](https://github.com/lazer8855/local-flightbook/releases/download/v0.1.0-beta.1/dashboard.html) — the standalone dashboard.
+- [europe.pmtiles](https://github.com/lazer8855/local-flightbook/releases/download/v0.1.0-beta.1/europe.pmtiles) — Europe background map, 1.38 GB.
+- [terrain-alps.pmtiles](https://github.com/lazer8855/local-flightbook/releases/download/v0.1.0-beta.1/terrain-alps.pmtiles) — optional Alpine elevation for shading, contours and 3D, 1.59 GB.
+
+Map archives are release assets and are not included in a Git clone or the source-code ZIP. Checksums, map provenance and attribution are attached to the release. Downloading requires internet; using the downloaded dashboard and maps works offline.
+
 1. Click **Choose flight folder**, select your root flight folder, and allow read
    access. The app recursively reads IGC files and its own flightbook JSON files.
 2. Click **Choose Europe map** and select **europe.pmtiles** beside the dashboard.
