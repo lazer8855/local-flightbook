@@ -52,8 +52,8 @@ export function setupStatistics(getFlights, onPeriodChange) {
       const card = node('article', '', 'panel statistic-card');
       card.append(node('small', label), node('strong', format(key, summary[key])));
       if (filters.year !== null) card.append(node('p', `${filters.year - 1}: ${model.previous ? format(key, model.previous[key]) : 'No recorded year'} · ${delta(key, summary[key], model.previous?.[key])}`, 'stat-comparison'));
-      const medianLabel = filters.month ? `Median ${MONTHS[filters.month - 1]}` : 'Median year';
-      card.append(node('p', `${medianLabel}: ${format(key, model.median[key])}${filters.year === null ? '' : ` · ${delta(key, summary[key], model.median[key])}`}`, 'stat-comparison'));
+      const averageLabel = filters.month ? `Average ${MONTHS[filters.month - 1]}` : 'Average year';
+      card.append(node('p', `${averageLabel}: ${format(key, model.average[key])}${filters.year === null ? '' : ` · ${delta(key, summary[key], model.average[key])}`}`, 'stat-comparison'));
       if (key === 'distanceKm') card.append(node('p', `${summary.trackedCount} of ${summary.count} flights have GPS distance`, 'stat-footnote'));
       cards.append(card);
     }
@@ -61,39 +61,39 @@ export function setupStatistics(getFlights, onPeriodChange) {
     const key = filters.metric;
     $('annual-heading').textContent = `${METRICS[key].label} by year`;
     const annualMax = Math.max(0, ...model.yearly.map(row => row[key]).filter(Number.isFinite));
-    const annualMedian = model.yearly.length ? buildStatistics(flights).median[key] : null;
-    $('annual-caption').textContent = `Median year: ${format(key, annualMedian)}. Click a year to explore it.`;
+    const annualAverage = model.yearly.length ? buildStatistics(flights).average[key] : null;
+    $('annual-caption').textContent = `Average year: ${format(key, annualAverage)}. Click a year to explore it.`;
     const annual = document.createDocumentFragment();
     for (const row of model.yearly) {
       const button = node('button', '', `chart-row${filters.year === row.year ? ' active' : ''}`);
       button.type = 'button'; button.setAttribute('aria-label', `${row.year}: ${format(key, row[key])}. Show year.`);
       button.append(node('span', String(row.year), 'chart-label'), chartBar(key, row[key], annualMax, 'selected-bar', String(row.year)), node('span', format(key, row[key]), 'chart-value'));
-      if (annualMax > 0 && Number.isFinite(annualMedian)) {
-        const line = node('span', '', 'median-line'); line.style.left = `${annualMedian / annualMax * 100}%`; button.querySelector('.bar-track').append(line);
+      if (annualMax > 0 && Number.isFinite(annualAverage)) {
+        const line = node('span', '', 'average-line'); line.style.left = `${annualAverage / annualMax * 100}%`; button.querySelector('.bar-track').append(line);
       }
       button.addEventListener('click', () => choose(row.year)); annual.append(button);
     }
     $('annual-chart').replaceChildren(annual);
-    $('monthly-heading').textContent = filters.year === null ? 'Your typical month' : `${filters.year} month by month`;
-    $('monthly-caption').textContent = filters.year === null ? `Median ${METRICS[key].label.toLowerCase()} for each calendar month across recorded years.` : `${METRICS[key].label}: ${filters.year}, ${filters.year - 1}${model.previous ? '' : ' (unavailable)'}, and the median for each calendar month. Click a month to filter flights.`;
+    $('monthly-heading').textContent = filters.year === null ? 'Your average month' : `${filters.year} month by month`;
+    $('monthly-caption').textContent = filters.year === null ? `Average ${METRICS[key].label.toLowerCase()} for each calendar month across recorded years.` : `${METRICS[key].label}: ${filters.year}, ${filters.year - 1}${model.previous ? '' : ' (unavailable)'}, and the average for each calendar month. Click a month to filter flights.`;
     $('monthly-legend').hidden = filters.year === null;
     $('legend-selected').textContent = filters.year ?? '';
     $('legend-previous').textContent = filters.year === null ? '' : filters.year - 1;
-    const monthlyMax = Math.max(0, ...model.monthly.flatMap(row => [row.selected?.[key], row.previous?.[key], row.median[key]]).filter(Number.isFinite));
+    const monthlyMax = Math.max(0, ...model.monthly.flatMap(row => [row.selected?.[key], row.previous?.[key], row.average[key]]).filter(Number.isFinite));
     const monthly = document.createDocumentFragment();
     for (const row of model.monthly) {
       const button = node(filters.year === null ? 'div' : 'button', '', `month-row${filters.month === row.month ? ' active' : ''}`);
       if (filters.year !== null) { button.type = 'button'; button.addEventListener('click', () => choose(filters.year, row.month)); }
       button.append(node('span', row.name.slice(0, 3), 'chart-label'));
       const bars = node('div', '', 'month-bars');
-      const values = filters.year === null ? [[row.median[key], 'median-bar', 'Median']] : [[row.selected[key], 'selected-bar', String(filters.year)], [row.previous?.[key], 'previous-bar', String(filters.year - 1)], [row.median[key], 'median-bar', 'Median']];
+      const values = filters.year === null ? [[row.average[key], 'average-bar', 'Average']] : [[row.selected[key], 'selected-bar', String(filters.year)], [row.previous?.[key], 'previous-bar', String(filters.year - 1)], [row.average[key], 'average-bar', 'Average']];
       for (const [value, cls, label] of values) bars.append(chartBar(key, value, monthlyMax, cls, label));
-      button.append(bars, node('span', format(key, filters.year === null ? row.median[key] : row.selected[key]), 'chart-value'));
+      button.append(bars, node('span', format(key, filters.year === null ? row.average[key] : row.selected[key]), 'chart-value'));
       button.setAttribute('aria-label', `${row.name}: ${values.map(([value, , label]) => `${label} ${format(key, value)}`).join(', ')}`);
       monthly.append(button);
     }
     $('monthly-chart').replaceChildren(monthly);
-    const note = `Based on ${model.years.length} recorded years. Comparisons use complete calendar periods as represented by loaded files, not matched year-to-date periods. Missing years are unavailable; empty months in recorded years count as zero. The median includes the selected year. ${model.undatedCount ? `${model.undatedCount} undated flights appear only in all-time totals. ` : ''}Manual flights contribute time and flight counts; GPS distance includes tracked flights only. Short recordings remain included.`;
+    const note = `Based on ${model.years.length} recorded years. Comparisons use complete calendar periods as represented by loaded files, not matched year-to-date periods. Missing years are unavailable; empty months in recorded years count as zero. The average includes the selected year. ${model.undatedCount ? `${model.undatedCount} undated flights appear only in all-time totals. ` : ''}Manual flights contribute time and flight counts; GPS distance includes tracked flights only. Short recordings remain included.`;
     $('statistics-note').textContent = note;
     $('statistics-empty').hidden = flights.length > 0;
     $('statistics-content').hidden = flights.length === 0;

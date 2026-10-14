@@ -8,10 +8,9 @@ export const METRICS = {
   flyingDays: { label: 'Flying days', unit: 'days' }
 };
 
-export function median(values) {
+export function average(values) {
   if (!values.length) return null;
-  const sorted = [...values].sort((a, b) => a - b), middle = Math.floor(sorted.length / 2);
-  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
 export function summarise(flights) {
@@ -38,13 +37,13 @@ export function buildStatistics(flights, year = null, month = null) {
   const period = (y, m = null) => summarise(dated.filter(flight => inPeriod(flight, y, m)));
   const yearly = years.map(y => ({ year: y, ...period(y) }));
   const baseline = month === null ? yearly : years.map(y => period(y, month));
-  const medianSummary = Object.fromEntries([...Object.keys(METRICS), 'averageSeconds', 'longestSeconds'].map(key => [key, median(baseline.map(summary => summary[key]).filter(Number.isFinite))]));
+  const averageSummary = Object.fromEntries([...Object.keys(METRICS), 'averageSeconds', 'longestSeconds'].map(key => [key, average(baseline.map(summary => summary[key]).filter(Number.isFinite))]));
   const monthly = MONTHS.map((name, i) => {
     const m = i + 1;
-    const medians = Object.fromEntries(Object.keys(METRICS).map(key => [key, median(years.map(y => period(y, m)[key]).filter(Number.isFinite))]));
-    return { month: m, name, selected: year === null ? null : period(year, m), previous: year !== null && years.includes(year - 1) ? period(year - 1, m) : null, median: medians };
+    const averages = Object.fromEntries(Object.keys(METRICS).map(key => [key, average(years.map(y => period(y, m)[key]).filter(Number.isFinite))]));
+    return { month: m, name, selected: year === null ? null : period(year, m), previous: year !== null && years.includes(year - 1) ? period(year - 1, m) : null, average: averages };
   });
-  return { years, yearly, monthly, selected: summarise(year === null ? flights : dated.filter(flight => inPeriod(flight, year, month))), previous: year !== null && years.includes(year - 1) ? period(year - 1, month) : null, median: medianSummary, undatedCount: flights.length - dated.length };
+  return { years, yearly, monthly, selected: summarise(year === null ? flights : dated.filter(flight => inPeriod(flight, year, month))), previous: year !== null && years.includes(year - 1) ? period(year - 1, month) : null, average: averageSummary, undatedCount: flights.length - dated.length };
 }
 
 export function comparison(value, baseline) {

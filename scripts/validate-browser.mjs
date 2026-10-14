@@ -122,7 +122,7 @@ try {
   assert.equal((await diagnostics()).statisticsSummary.count, 64);
   assert.equal(await page.locator('.flight-item').count(), 64);
   assert.match(await page.locator('#statistics-cards').textContent(), /2017:/);
-  assert.match(await page.locator('#statistics-cards').textContent(), /Median year:/);
+  assert.match(await page.locator('#statistics-cards').textContent(), /Average year:/);
   await page.screenshot({ path: `validation/artifacts/${label}-statistics-year.png`, fullPage: true });
   await page.locator('#stats-metric').selectOption('count');
   assert.match(await page.locator('#annual-heading').textContent(), /Flights/);
@@ -136,7 +136,7 @@ try {
   assert.equal((await diagnostics()).statisticsSummary.count, 2);
   assert.equal(await page.locator('.flight-item').count(), 2);
   assert.ok((await diagnostics()).selectedFixes > 0);
-  assert.match(await page.locator('#statistics-cards').textContent(), /Median June:/);
+  assert.match(await page.locator('#statistics-cards').textContent(), /Average June:/);
   assert.doesNotMatch(await page.locator('#statistics-cards').textContent(), /Infinity|NaN/);
   await page.screenshot({ path: `validation/artifacts/${label}-statistics-month.png`, fullPage: true });
   await page.locator('#stats-reset').click();
@@ -144,7 +144,7 @@ try {
   assert.equal(await page.locator('#stats-month').isDisabled(), true);
   await page.locator('#stats-metric').selectOption('durationSeconds');
   checks.yearMonthStatistics = true;
-  checks.previousYearAndMedianComparisons = true;
+  checks.previousYearAndAverageComparisons = true;
   checks.emptyMonthAndChartDrilldown = true;
   assert.equal((await diagnostics()).selectedFixes, (await diagnostics()).trackCoordinates);
   await page.locator('#map-file').setInputFiles(resolve('europe.pmtiles'));

@@ -27,8 +27,8 @@ select:disabled{opacity:.5}
 .chart-fill{height:100%;min-width:0;border-radius:3px}
 .selected-bar{background:#208f7d}
 .previous-bar{background:#8aaac6}
-.median-bar{background:#ce9f58}
-.median-line{position:absolute;top:-3px;bottom:-3px;border-left:2px dashed #ce9f58;pointer-events:none}
+.average-bar{background:#ce9f58}
+.average-line{position:absolute;top:-3px;bottom:-3px;border-left:2px dashed #ce9f58;pointer-events:none}
 .month-bars{display:grid;gap:3px}
 .month-bars .bar-track{height:6px}
 .chart-legend{display:flex;gap:16px;flex-wrap:wrap;margin:0 0 12px;font-size:10px;color:var(--muted)}

@@ -122,11 +122,11 @@ see period totals and filter the flight library. Click chart rows to drill down.
 Chart metrics include recorded time, flights, GPS track distance, and flying days.
 Period cards also show average and longest flight duration.
 
-Comparisons use the same calendar year/month one year earlier, and the median
+Comparisons use the same calendar year/month one year earlier, and the arithmetic average
 across all years with recorded flights (including the selected year). A missing
 year is unavailable, while an empty month inside a recorded year contributes
-zero to count/time/day totals. Median duration statistics omit empty periods;
-GPS medians omit periods where every flight lacks GPS data. Unknown distance is
+zero to count/time/day totals. Average duration statistics omit empty periods;
+GPS averages omit periods where every flight lacks GPS data. Unknown distance is
 not counted as zero. Undated flights contribute only to all-time totals.
 
 Comparisons reflect the files you load: an incomplete archive or current year

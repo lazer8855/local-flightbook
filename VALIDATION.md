@@ -16,6 +16,8 @@ Machine-readable results are in `validation/chrome.json` and
 
 ## Confirmed behaviour
 
+- Average comparisons were checked on the offline `file://` page in Chrome and Edge using controlled annual totals of 1 h, 1 h and 10 h. The baseline is 4 h, a 1 h June shows −75%, and the annual chart marker is at 40% of its 10 h scale. Cards, monthly bars, legend and calculation notes use averages. Unit tests also verify empty-month zeros and exclusion of unknown GPS distance from averages.
+
 - XC calculations use a bundled classic worker with `igc-xc-score` 1.8.0. Offline browser tests verify open/free/FAI distances, refinement without decreasing results, inclusive duration and XC filters, invalid ranges, duration sorting, map/heatmap filtering, clearing filters, and unknown manual distances. The full archive has 429 eligible tracks and two with fewer than five fixes. A separate complete run checked all 431 files with no calculation errors, valid triangle closure/FAI ratios, closing-gap deductions and plausible bounds relative to recorded track length (`validation/xc-archive.json`). Initial per-discipline budgets are 75 ms; results are explicitly time-limited estimates unless the optimizer proves optimality. Initial searches may find no triangle; these remain unknown until refinement, not zero. Statistics retain their year/month scope.
 
 - Offline 3D terrain and elevated flight rendering passed in Chrome 154 and Edge 155. Browser checks cover actual GPU draw frames, one elevated segment per pair of GPS fixes, 60° initial tilt, full-window viewing, basemap reconnection during 3D, ground overview modes, and returning to flat 2D. Terrain uses a separate DEM source from hill shading, at exaggeration 1. Screenshots: `validation/artifacts/chrome-3d-flight.png` and `edge-3d-flight.png`.
@@ -30,7 +32,7 @@ Machine-readable results are in `validation/chrome.json` and
 - Thirty-one parser/scanner/statistics/map/terrain/vertical-speed/3D/XC/filter tests pass, including arbitrary nesting, dates independent
   of folder names, invalid dates/fixes, both hemispheres, midnight rollover,
   manual JSON validation, duplicate handling, calendar-period comparisons,
-  empty months, missing years, medians, zero baselines, and unknown GPS distance.
+  empty months, missing years, averages, zero baselines, and unknown GPS distance.
 - Terrain tests cover Terrarium elevation decoding, 100 m contour generation,
   the zoom-12 cap, independent switches, and visible major-contour label placement.
 - Map tests confirm that overview tracks remain separate with every fix preserved,
@@ -44,8 +46,8 @@ Machine-readable results are in `validation/chrome.json` and
   Browser checks verify 64 flights in 2018, two flights in June 2022, zero flights
   in January 2022, and a return to all 431 flights after resetting the period.
 - Cards show period totals, previous-calendar-year totals/differences, and the
-  median over recorded years. Monthly charts compare the same calendar month
-  across years. All-time monthly charts show the median month, not a sum of
+  average over recorded years. Monthly charts compare the same calendar month
+  across years. All-time monthly charts show the average month, not a sum of
   lifetime monthly totals. Full calendar periods are used, not matched YTD dates.
 - 44 recordings are shorter than one minute. Other warnings identify recordings
   containing invalid GPS fixes; these fixes are skipped without dropping the file.
