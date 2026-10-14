@@ -4,9 +4,8 @@ let nextSource = 0;
 export async function createTerrain(file, maplibre) {
   const archive = new PMTiles(new FileSource(file));
   const header = await archive.getHeader(), metadata = await archive.getMetadata();
-  if (header.tileType !== 4 || !/mapterhorn/i.test(metadata.attribution || '')) throw new Error('Choose the Mapterhorn terrain-alps.pmtiles elevation package, not the Europe basemap');
+  if (header.tileType !== 4 || !/mapterhorn/i.test(metadata.attribution || '')) throw new Error('Choose a Mapterhorn terrain .pmtiles elevation package');
   if (header.maxZoom > 12) throw new Error('This dashboard expects an elevation package capped at zoom 12');
-  if (header.maxZoom < 11) throw new Error('This terrain package lacks zoom 11–12 data needed for the contour layer');
   const blobURL = URL.createObjectURL(new Blob([TERRAIN_WORKER], { type: 'text/javascript' }));
   const worker = new Worker(blobURL);
   const pending = new Map(); let nextRequest = 0, disposed = false;
@@ -54,7 +53,7 @@ export function terrainSources(terrain) {
   return {
     'terrain-elevation': { type: 'raster-dem', tiles: [terrain.rasterURL], encoding: 'terrarium', tileSize: 512, minzoom: h.minZoom, maxzoom: Math.min(12, h.maxZoom), bounds },
     'terrain-dem': { type: 'raster-dem', tiles: [terrain.rasterURL], encoding: 'terrarium', tileSize: 512, minzoom: h.minZoom, maxzoom: Math.min(12, h.maxZoom), bounds, attribution: '© <a href="https://mapterhorn.com/attribution/" target="_blank" rel="noopener">Mapterhorn terrain sources</a>' },
-    'terrain-contours': { type: 'vector', tiles: [terrain.contourURL], minzoom: 11, maxzoom: Math.min(12, h.maxZoom), bounds },
+    'terrain-contours': { type: 'vector', tiles: [terrain.contourURL], minzoom: Math.min(11, h.maxZoom), maxzoom: Math.min(12, h.maxZoom), bounds },
     'terrain-labels': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } }
   };
 }

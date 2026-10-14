@@ -1,0 +1,27 @@
+{
+    "file":  "switzerland.pmtiles",
+    "source":  "https://build.protomaps.com/20261012.pmtiles",
+    "sourceBuildDate":  "2026-10-12",
+    "sourceBasemapVersion":  "4.15.2",
+    "sourceOSMReplicationTime":  "2026-10-12T04:00:00Z",
+    "sourcePlanetBlake3":  "2f8c16cd456121112bdeab0dd9c122c4242ac9e0cec4e171c4f6d866e5825d65",
+    "extractTool":  "go-pmtiles 1.31.2",
+    "bounds":  [
+                   5.9559,
+                   45.8179,
+                   10.4921,
+                   47.8084
+               ],
+    "minZoom":  0,
+    "maxZoom":  15,
+    "bytes":  997855920,
+    "sha256":  "9ac84da2febb51769fb149e3ab8e56f8e1c52edce7c63adf898e175e68981805",
+    "addressedTiles":  147109,
+    "tileEntries":  146830,
+    "distinctTileContents":  146576,
+    "format":  "PMTiles v3 / MVT / gzip",
+    "attribution":  "© OpenStreetMap contributors · Natural Earth · Protomaps",
+    "license":  "Protomaps basemap distributed as an ODbL Produced Work; OpenStreetMap attribution required",
+    "documentation":  "https://docs.protomaps.com/basemaps/downloads",
+    "notes":  "Switzerland bounding-box extract with full source detail through zoom 15. Intersecting tiles include neighbouring areas, especially at low zoom; not clipped to the national border. No elevation or satellite imagery."
+}

@@ -1,13 +1,11 @@
 import * as maplibre from 'maplibre-gl';
 import { PMTiles, FileSource, Protocol } from 'pmtiles';
-import { scanFolder, createManualFlight } from './flights.mjs';
-import { setupStatistics } from './statistics-ui.mjs';
-import { inPeriod, MONTHS } from './statistics.mjs';
+import { scanFolder, createManualFlight, getSourceHandle } from './flights.mjs';
+import { setupDashboard } from './dashboard-ui.mjs';
 import { buildMapOverview, EMPTY_MAP_DATA } from './map-overview.mjs';
 import { createTerrain, terrainSources, terrainLayers, contourLabelData } from './terrain.mjs';
 import { trackRates, RATE_COLOR } from './track-rate.mjs';
 import { flight3DLayer } from './flight-3d.mjs';
-import { filterFlights } from './flight-filters.mjs';
 import { startXC } from './xc-controller.mjs';
 import { XC_TYPES } from './xc-types.mjs';
 
@@ -19,7 +17,8 @@ let overviewCache = null;
 const xcCache = new Map();
 let xcController = null, xcRefreshTimer = null, xcRevision = 0;
 let map = null, markers = [], busy = false, mapGeneration = 0;
-let period = { year: null, month: null };
+let dashboard = null;
+let editingManual = null;
 let terrain = null, terrainGeneration = 0, terrainApplyQueued = false;
 let terrainLabelSignature = '';
 const rateCache = new WeakMap();
@@ -83,24 +82,15 @@ function trackData() {
 }
 
 function visibleFlights() {
-  if (libraryFilterError()) return [];
-  return filterFlights(state.flights.filter(flight => period.year === null || inPeriod(flight, period.year, period.month)), libraryFilters());
+  return dashboard?.visible || state.flights;
 }
 
 function libraryFilters() {
-  const number = id => $(id).value === '' ? null : Number.isFinite($(id).valueAsNumber) ? $(id).valueAsNumber : null;
-  return { search: $('search').value, minMinutes: number('duration-min'), maxMinutes: number('duration-max'), minKm: number('xc-min'), maxKm: number('xc-max'), xcType: $('xc-type').value, sort: $('flight-sort').value };
+  return dashboard?.filters || {};
 }
 
 function libraryFilterError() {
-  const filters = libraryFilters();
-  for (const id of ['duration-min', 'duration-max', 'xc-min', 'xc-max']) {
-    const invalid = !$(id).validity.valid; $(id).setAttribute('aria-invalid', String(invalid));
-    if (invalid) return 'Enter non-negative duration and distance values.';
-  }
-  if (filters.minMinutes !== null && filters.maxMinutes !== null && filters.minMinutes > filters.maxMinutes) return 'Minimum duration must not exceed maximum duration.';
-  if (filters.minKm !== null && filters.maxKm !== null && filters.minKm > filters.maxKm) return 'Minimum XC distance must not exceed maximum XC distance.';
-  return '';
+  return dashboard?.filters.error || '';
 }
 
 function refreshLibrary(fit = false) {
@@ -117,7 +107,7 @@ function xcText(value) {
   if (!value) return 'Calculating…';
   if (value.distanceKm === null) return 'Not found yet · refine';
   if (!value.distanceKm && value.optimal) return 'No qualifying route';
-  return `${value.optimal ? '' : '≈ '}${value.distanceKm.toFixed(2)} km`;
+  return `${value.source === 'manual' ? 'Manual · ' : value.optimal ? '' : '≈ '}${value.distanceKm.toFixed(2)} km`;
 }
 
 function renderXCDetail() {
@@ -126,7 +116,7 @@ function renderXCDetail() {
   const grid = node('div', '', 'detail-grid');
   for (const [key, label] of Object.entries(XC_TYPES)) {
     const cell = node('div', '');
-    cell.append(node('small', label), node('strong', flight.points.length < 5 ? 'Unavailable' : flight.xcError ? 'Calculation failed' : xcText(flight.xc?.[key])));
+    cell.append(node('small', label), node('strong', flight.type === 'manual' ? key === 'open' && flight.xc?.open ? xcText(flight.xc.open) : 'Unavailable' : flight.points.length < 5 ? 'Unavailable' : flight.xcError ? 'Calculation failed' : xcText(flight.xc?.[key])));
     const value = flight.xc?.[key];
     if (value?.gapKm !== null && value?.gapKm !== undefined) cell.append(node('small', `Closing gap ${value.gapKm.toFixed(2)} km, subtracted`));
     grid.append(cell);
@@ -134,14 +124,14 @@ function renderXCDetail() {
   const refine = node('button', xcController?.refining === flight ? 'Refining…' : 'Refine XC distances', 'secondary');
   refine.type = 'button'; refine.disabled = flight.points.length < 5 || !xcController || xcController.refining === flight;
   refine.addEventListener('click', () => { xcController.refine(flight); renderXCDetail(); });
-  const note = flight.xcError ? `XC error: ${flight.xcError}` : flight.points.length < 5 ? 'XC calculation needs at least five valid GPS fixes. Manual flights have no XC track.' : 'XContest-style distance estimates over the recorded track, without contest multipliers. ≈ means the search time limit was reached. Refinement runs a longer search; official contest validation is separate.';
+  const note = flight.type === 'manual' ? 'Open XC distance is manually entered. GPS track distance and triangle distances are unavailable.' : flight.xcError ? `XC error: ${flight.xcError}` : flight.points.length < 5 ? 'XC calculation needs at least five valid GPS fixes.' : 'XContest-style distance estimates over the recorded track, without contest multipliers. ≈ means the search time limit was reached. Refinement runs a longer search; official contest validation is separate.';
   target.replaceChildren(node('h3', 'Cross-country distances'), grid, node('p', note, 'muted'), refine);
 }
 
 function updateXCStatus() {
   const eligible = state.flights.filter(f => f.points.length >= 5), complete = eligible.filter(f => f.xc || f.xcError).length;
   const failed = eligible.filter(f => f.xcError).length;
-  $('xc-status').textContent = !state.flights.length ? 'XC distances are calculated locally after loading flights.' : `XC calculations: ${complete} of ${eligible.length} tracks processed${xcController?.pending ? ` · ${xcController.pending} queued or calculating` : ' · complete'}${failed ? ` · ${failed} failed; select a flight to retry refinement` : ''}. Manual flights and tracks with fewer than five fixes have no XC distance.`;
+  $('xc-status').textContent = !state.flights.length ? 'XC distances are calculated locally after loading flights.' : `XC calculations: ${complete} of ${eligible.length} tracks processed${xcController?.pending ? ` · ${xcController.pending} queued or calculating` : ' · complete'}${failed ? ` · ${failed} failed; select a flight to retry refinement` : ''}. Manual Open XC values contribute when entered.`;
 }
 
 function onXCUpdate(flight) {
@@ -149,15 +139,16 @@ function onXCUpdate(flight) {
   if (state.selected === flight) renderXCDetail();
   if (!xcRefreshTimer) xcRefreshTimer = setTimeout(() => {
     xcRefreshTimer = null; updateXCStatus();
-    const filters = libraryFilters();
-    if (filters.minKm !== null || filters.maxKm !== null) refreshLibrary();
+    const before = visibleFlights().map(f => f.key).sort().join('|');
+    dashboard?.refresh();
+    if (before !== visibleFlights().map(f => f.key).sort().join('|')) refreshLibrary();
     else renderFlights();
-  }, 600);
+  }, 1500);
 }
 
 function overviewData() {
   const filters = libraryFilters();
-  const key = `${period.year}/${period.month}/${JSON.stringify(filters)}/${filters.minKm !== null || filters.maxKm !== null ? xcRevision : 0}`;
+  const key = visibleFlights().map(f => f.key).sort().join('|');
   if (!overviewCache || overviewCache.flights !== state.flights || overviewCache.key !== key) overviewCache = { flights: state.flights, key, data: buildMapOverview(visibleFlights()) };
   return overviewCache.data;
 }
@@ -202,7 +193,7 @@ async function connectMap(file) {
     activeMap.setStyle(baseStyle(archive, header));
     $('map-status').textContent = `${file.name} · ${(file.size / 1024 ** 3).toFixed(2)} GiB · detail through zoom ${header.maxZoom}. Zoom further to inspect the full-precision track.`;
     if (state.selected?.points.length) fitTrack();
-  } catch (error) { $('map-status').textContent = `Could not open map: ${error.message}. Choose a compatible europe.pmtiles file and retry.`; }
+  } catch (error) { $('map-status').textContent = `Could not open map: ${error.message}. Choose a compatible basemap .pmtiles file and retry.`; }
 }
 
 function removeTerrainLayers() {
@@ -252,15 +243,17 @@ async function connectTerrain(file) {
     if (generation !== terrainGeneration) { next.dispose(); return; }
     if (!ensureMap()) { next.dispose(); throw new Error('WebGL map is unavailable'); }
     removeTerrainLayers(); terrain?.dispose(); terrain = next;
-    $('terrain-shading').disabled = false; $('terrain-contours').disabled = false;
+    $('terrain-shading').disabled = false;
+    $('terrain-contours').disabled = next.header.maxZoom < 11;
+    if ($('terrain-contours').disabled) $('terrain-contours').checked = false;
     $('map-3d').disabled = false;
     applyTerrain();
-    $('terrain-status').textContent = `${file.name} · ${(file.size / 1024 ** 3).toFixed(2)} GiB · elevation detail capped at zoom ${Math.min(12, next.header.maxZoom)}. 100 m contours, labels every 500 m, visible from zoom 11. Coverage: Switzerland and the Alps.`;
+    $('terrain-status').textContent = `${file.name} · ${(file.size / 1024 ** 3).toFixed(2)} GiB · elevation detail capped at zoom ${Math.min(12, next.header.maxZoom)}. ${next.header.maxZoom < 11 ? 'Shading and 3D available; contours require terrain with zoom 11 or higher.' : '100 m contours, labels every 500 m, visible from zoom 11.'}`;
     if (state.selected?.points.length || (state.mapMode !== 'single' && overviewData().flightCount)) fitTrack();
     else map.fitBounds([[next.header.minLon, next.header.minLat], [next.header.maxLon, next.header.maxLat]], { padding: 30, duration: 0 });
   } catch (error) {
     if (next && terrain !== next) next.dispose();
-    if (generation === terrainGeneration) $('terrain-status').textContent = `Could not open terrain: ${error.message}. Choose terrain-alps.pmtiles and retry.`;
+    if (generation === terrainGeneration) $('terrain-status').textContent = `Could not open terrain: ${error.message}. Choose a compatible terrain .pmtiles file and retry.`;
   }
 }
 
@@ -320,6 +313,10 @@ function selectFlight(flight, inspect = false) {
   }
   $('flight-detail').append(heading, node('p', flight.path, 'path'), grid);
   const xcDetail = node('div', '', 'xc-detail'); xcDetail.id = 'xc-detail'; $('flight-detail').append(xcDetail); renderXCDetail();
+  if (flight.type === 'manual') {
+    const edit = node('button', 'Edit manual flight', 'secondary'); edit.id = 'edit-manual'; edit.type = 'button';
+    edit.addEventListener('click', () => openManual(flight)); $('flight-detail').append(edit);
+  }
   if (flight.notes) $('flight-detail').append(node('p', flight.notes));
   if (flight.warnings.length) $('flight-detail').append(node('p', `Review: ${flight.warnings.join(' · ')}`, 'muted'));
   if (state.bounds && flight.points.some(p => p.lon < state.bounds[0] || p.lon > state.bounds[2] || p.lat < state.bounds[1] || p.lat > state.bounds[3])) $('flight-detail').append(node('p', 'This track extends beyond the local map coverage. Its GPS track still displays.', 'muted'));
@@ -329,15 +326,13 @@ function selectFlight(flight, inspect = false) {
 
 function renderFlights() {
   const filtered = visibleFlights();
-  const total = state.flights.filter(f => period.year === null || inPeriod(f, period.year, period.month)).length;
-  const filters = libraryFilters(), hasXC = filters.minKm !== null || filters.maxKm !== null;
-  $('filter-summary').textContent = libraryFilterError() || `${filtered.length} of ${total} flights${hasXC ? ' · flights with pending/unavailable XC are excluded' : ''}. Filters apply to the library and map; statistics use year/month.`;
+  const filters = libraryFilters();
   const fragment = document.createDocumentFragment();
   for (const flight of filtered) {
     const button = node('button', '', `flight-item${state.selected === flight ? ' selected' : ''}`);
     button.type = 'button'; button.setAttribute('aria-pressed', String(state.selected === flight));
     button.append(node('strong', `${flight.date || 'Undated'} · ${duration(flight.durationSeconds)}`), node('small', `${flight.site || 'Unnamed site'} · ${flight.type === 'manual' ? 'Manual' : 'IGC'}`), node('small', flight.path));
-    if (flight.points.length >= 5) button.append(node('small', `${XC_TYPES[filters.xcType]}: ${flight.xcError ? 'Unavailable' : xcText(flight.xc?.[filters.xcType])}`));
+    if (flight.points.length >= 5 || flight.xc?.open) button.append(node('small', `Open XC: ${flight.xcError ? 'Unavailable' : xcText(flight.xc?.open)}`));
     if (flight.warnings.length) button.append(node('small', 'Needs review', 'warning'));
     button.addEventListener('click', () => selectFlight(flight, true)); fragment.append(button);
   }
@@ -353,7 +348,7 @@ async function rescan() {
     const result = await scanFolder(state.directory, count => setStatus(`Scanning… ${count} candidate files read.`));
     state.flights = result.flights; state.issues = result.issues;
     for (const flight of state.flights) if (xcCache.has(flight.key)) flight.xc = xcCache.get(flight.key);
-    statistics.refresh();
+    dashboard?.refresh();
     const selectedKey = state.selected?.key;
     state.selected = null;
     $('flight-count').textContent = state.flights.length.toLocaleString();
@@ -378,7 +373,7 @@ async function rescan() {
 }
 
 $('folder').addEventListener('click', async () => {
-  try { state.directory = await window.showDirectoryPicker({ mode: 'read' }); await rescan(); }
+  try { state.directory = await window.showDirectoryPicker({ mode: 'read' }); dashboard?.reset(); await rescan(); }
   catch (error) { setStatus(cancelled(error) ? 'Folder selection cancelled or access not granted. Click Choose flight folder to retry.' : `Folder access failed: ${error.message}. Retry in desktop Chrome or Edge.`); }
 });
 $('rescan').addEventListener('click', rescan);
@@ -424,15 +419,16 @@ document.addEventListener('keydown', event => {
     else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
   }
 });
-for (const id of ['search', 'duration-min', 'duration-max', 'xc-min', 'xc-max']) $(id).addEventListener('input', () => refreshLibrary(true));
-for (const id of ['xc-type', 'flight-sort']) $(id).addEventListener('change', () => refreshLibrary(true));
-$('clear-filters').addEventListener('click', () => {
-  for (const id of ['search', 'duration-min', 'duration-max', 'xc-min', 'xc-max']) $(id).value = '';
-  $('xc-type').value = 'open'; $('flight-sort').value = 'date'; refreshLibrary(true);
-});
 $('map-mode').addEventListener('change', () => { state.mapMode = $('map-mode').value; drawFlight(); fitTrack(); });
 $('theme').addEventListener('click', () => { document.body.classList.toggle('dark'); $('theme').textContent = document.body.classList.contains('dark') ? 'Light theme' : 'Dark theme'; });
-$('add-manual').addEventListener('click', () => { $('save-status').textContent = ''; if (!$('manual-form').elements.date.value) $('manual-form').elements.date.value = new Date().toLocaleDateString('en-CA'); $('manual-dialog').showModal(); });
+function openManual(flight = null) {
+  editingManual = flight; const form = $('manual-form'); form.reset(); $('save-status').textContent = '';
+  $('manual-title').textContent = flight ? 'Edit manual flight' : 'Add a manual flight';
+  $('manual-help').textContent = flight ? 'Choose the original JSON file to update it and keep its ID. Choosing another file creates a copy with a new ID. IGC files cannot be overwritten.' : 'Save a flightbook JSON file inside your connected flight folder. Open XC distance is optional; blank means unavailable, zero means zero kilometres.';
+  for (const [key,value] of Object.entries(flight ? { date:flight.date,durationMinutes:flight.durationSeconds/60,site:flight.site||'',wing:flight.wing||'',notes:flight.notes||'',openXcDistanceKm:flight.openXcDistanceKm??'' } : {date:new Date().toLocaleDateString('en-CA')})) form.elements[key].value = value;
+  $('manual-dialog').showModal();
+}
+$('add-manual').addEventListener('click', () => openManual());
 $('close-manual').addEventListener('click', () => $('manual-dialog').close());
 $('manual-form').addEventListener('submit', async event => {
   event.preventDefault();
@@ -441,16 +437,23 @@ $('manual-form').addEventListener('submit', async event => {
   catch (error) { $('save-status').textContent = error.message; return; }
   $('save-manual').disabled = true;
   try {
-    const handle = await window.showSaveFilePicker({ suggestedName: `${flight.date}-manual-${flight.id.slice(0, 8)}.json`, ...(state.directory ? { startIn: state.directory } : {}), types: [{ description: 'Flightbook JSON', accept: { 'application/json': ['.json'] } }] });
+    const originalHandle = editingManual ? getSourceHandle(editingManual) : null;
+    const handle = await window.showSaveFilePicker({ suggestedName: originalHandle?.name || `${flight.date}-manual-${flight.id.slice(0, 8)}.json`, ...(originalHandle || state.directory ? { startIn: originalHandle || state.directory } : {}), types: [{ description: 'Flightbook JSON', accept: { 'application/json': ['.json'] } }] });
+    if (/\.igc$/i.test(handle.name)) throw new Error('IGC files cannot be overwritten. Select a .json file.');
+    if (!/\.json$/i.test(handle.name)) throw new Error('Choose a .json filename.');
+    if (originalHandle && await handle.isSameEntry(originalHandle)) flight.id = editingManual.id;
     const writable = await handle.createWritable();
     try { await writable.write(`${JSON.stringify(flight, null, 2)}\n`); await writable.close(); }
     catch (error) { await writable.abort().catch(() => {}); throw error; }
     $('save-status').textContent = `Saved ${handle.name}. ${state.directory ? 'Rescanning your connected folder…' : 'Connect its parent flight folder to load it.'}`;
     if (state.directory) {
       await rescan();
+      const savedEntry = state.flights.find(item => item.id === flight.id);
+      if (savedEntry) { if (!visibleFlights().includes(savedEntry)) dashboard?.reset(); selectFlight(savedEntry, true); }
       $('save-status').textContent = state.flights.some(item => item.id === flight.id) ? `Saved and loaded ${handle.name}.` : `Saved ${handle.name}. It was not found in the connected folder; connect its parent folder to load it.`;
     }
     event.target.reset();
+    editingManual = null;
   } catch (error) { $('save-status').textContent = cancelled(error) ? 'Save cancelled or permission not granted. Your form is kept; retry when ready.' : `Could not save: ${error.message}. Your form is kept; retry when ready.`; }
   finally { $('save-manual').disabled = false; }
 });
@@ -461,11 +464,7 @@ if (!window.isSecureContext || !('showDirectoryPicker' in window) || !('showSave
 }
 ensureMap();
 
-const statistics = setupStatistics(() => state.flights, selectedPeriod => {
-  period = selectedPeriod;
-  $('library-period').textContent = period.year === null ? 'All flights' : `${period.month ? `${MONTHS[period.month - 1]} ` : ''}${period.year} flights`;
-  refreshLibrary(true);
-});
+dashboard = setupDashboard(() => state.flights, change => change?.sortOnly ? renderFlights() : refreshLibrary(true), flight => selectFlight(flight, true), () => requestAnimationFrame(() => map?.resize()));
 
 // Read-only validation data; no handles, mutation methods, or remote services.
 Object.defineProperty(window, 'flightbookDiagnostics', { get: () => ({
@@ -498,8 +497,12 @@ Object.defineProperty(window, 'flightbookDiagnostics', { get: () => ({
   mapTrackCount: map?.getSource('track')?.serialize()?.data?.features?.length || 0,
   heatCells: state.mapMode === 'heat' ? overviewData().density.features.length : 0,
   heatmapVisible: map?.getLayer('flight-heatmap') ? map.getLayoutProperty('flight-heatmap', 'visibility') === 'visible' : false,
-  statisticsPeriod: statistics.filters,
-  statisticsSummary: statistics.model.selected,
+  statisticsPeriod: dashboard.filters,
+  statisticsSummary: dashboard.model.summary,
+  dashboardView: dashboard.view,
+  statisticsGranularity: dashboard.model.granularity,
+  referenceYears: dashboard.model.referenceYears,
+  selectedManualId: state.selected?.type === 'manual' ? state.selected.id : null,
   selectedPath: state.selected?.path || null,
   selectedFixes: state.selected?.points.length || 0,
   trackCoordinates: map?.getSource('track')?.serialize()?.data?.features?.[0]?.geometry?.coordinates.length || 0,

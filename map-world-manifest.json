@@ -1,0 +1,28 @@
+{
+    "file":  "world.pmtiles",
+    "source":  "https://build.protomaps.com/20261012.pmtiles",
+    "sourceBuildDate":  "2026-10-12",
+    "sourceBasemapVersion":  "4.15.2",
+    "sourceOSMReplicationTime":  "2026-10-12T04:00:00Z",
+    "sourcePlanetBlake3":  "2f8c16cd456121112bdeab0dd9c122c4242ac9e0cec4e171c4f6d866e5825d65",
+    "extractTool":  "go-pmtiles 1.31.2",
+    "bounds":  [
+                   -180,
+                   -85.0511288,
+                   180,
+                   85.0511288
+               ],
+    "minZoom":  0,
+    "maxZoom":  10,
+    "bytes":  3783467968,
+    "sha256":  "9ed7c66a7ace082742e93b2245dd99c4911fc98992bea504c3e86d39ae96ba6b",
+    "addressedTiles":  1398101,
+    "tileEntries":  657664,
+    "distinctTileContents":  331220,
+    "format":  "PMTiles v3 / MVT / gzip",
+    "attribution":  "© OpenStreetMap contributors · Natural Earth · Protomaps",
+    "license":  "Protomaps basemap distributed as an ODbL Produced Work; OpenStreetMap attribution required",
+    "documentation":  "https://docs.protomaps.com/basemaps/downloads",
+    "notes":  "Worldwide Web Mercator coverage; poles beyond +/-85.0511288 degrees are outside this projection. Zoom 10 is the highest source zoom under the decimal 4 GB limit; zoom 11 dry-run estimated 8.0 GB. No elevation or satellite imagery.",
+    "maxBytes":  4000000000
+}

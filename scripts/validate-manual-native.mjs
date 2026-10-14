@@ -1,0 +1,40 @@
+import {chromium} from 'playwright';
+import {execFileSync} from 'node:child_process';
+import {mkdir,readFile,writeFile} from 'node:fs/promises';
+import {resolve,join} from 'node:path';
+import {pathToFileURL} from 'node:url';
+import assert from 'node:assert/strict';
+const executablePath=process.env.FLIGHTBOOK_BROWSER||'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
+const label=process.env.FLIGHTBOOK_BROWSER_LABEL||'native-edge';
+const root=resolve('.cache',`manual-native-${label}-${Date.now()}`),nested=join(root,'Flüge ü','Site with spaces');
+await mkdir(nested,{recursive:true});await mkdir('validation/artifacts',{recursive:true});
+const original=join(nested,'original.json');
+await writeFile(original,JSON.stringify({format:'local-flightbook',version:1,id:'original-native',date:'2026-10-14',durationSeconds:1800,site:'Native editing fixture'}));
+const browser=await chromium.launch({executablePath,headless:false,chromiumSandbox:true,args:['--force-renderer-accessibility',`--flightbook-validation=${label}`]});
+const context=await browser.newContext({offline:true,viewport:{width:1280,height:1000}}),page=await context.newPage(),errors=[],network=[];
+page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});page.on('request',r=>{if(/^https?:/.test(r.url()))network.push(r.url());});
+const wait=()=>page.waitForTimeout(700);
+function native(action,path=''){console.log(execFileSync('powershell',['-NoProfile','-File','scripts/native-dialog.ps1','-Action',action,'-Path',path,'-OwnerTag',label],{encoding:'utf8',timeout:15000}).trim());}
+try{
+  await page.goto(pathToFileURL(resolve('dashboard.html')).href);await wait();
+  await page.locator('#folder').click();await wait();native('choose',root);await wait();native('allow');
+  await page.waitForFunction(()=>window.flightbookDiagnostics.flightCount===1);
+  await page.locator('#edit-manual').click();assert.equal(await page.locator('[name=openXcDistanceKm]').inputValue(),'');
+  await page.locator('[name=openXcDistanceKm]').fill('12.5');await page.locator('#save-manual').click();await wait();native('cancel');await wait();
+  assert.equal(await page.locator('[name=openXcDistanceKm]').inputValue(),'12.5');
+  await page.locator('#save-manual').click();await wait();native('choose',original);await wait();native('overwrite');await wait();native('allow');
+  await page.waitForFunction(()=>document.getElementById('save-status').textContent.startsWith('Saved and loaded'));
+  const edited=JSON.parse(await readFile(original,'utf8'));assert.equal(edited.id,'original-native');assert.equal(edited.openXcDistanceKm,12.5);
+  assert.equal(await page.evaluate(()=>window.flightbookDiagnostics.statisticsSummary.openXcKm),12.5);
+  await page.locator('#close-manual').click();await page.locator('#edit-manual').click();await page.locator('[name=openXcDistanceKm]').fill('0');
+  const copyPath=join(nested,'copy.json');await page.locator('#save-manual').click();await wait();native('choose',copyPath);await wait();native('allow');
+  await page.waitForFunction(()=>window.flightbookDiagnostics.flightCount===2);
+  const copy=JSON.parse(await readFile(copyPath,'utf8'));assert.notEqual(copy.id,edited.id);assert.equal(copy.openXcDistanceKm,0);
+  assert.equal(JSON.parse(await readFile(original,'utf8')).openXcDistanceKm,12.5);
+  await page.locator('#close-manual').click();await page.reload();await wait();
+  await page.locator('#folder').click();await wait();native('choose',root);await wait();native('allow');await page.waitForFunction(()=>window.flightbookDiagnostics.flightCount===2);
+  assert.equal(await page.evaluate(()=>window.flightbookDiagnostics.statisticsSummary.coverage.manual),2);
+  assert.deepEqual(errors,[]);assert.deepEqual(network,[]);
+  const report={browser:await browser.version(),nativeOriginalOverwrite:true,nativeSaveCopy:true,cancelPreservesForm:true,reopen:true,offlineNoHTTPRequests:true,errors};
+  await writeFile(`validation/${label}-manual.json`,JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report));
+}finally{await browser.close();}

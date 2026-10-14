@@ -1,0 +1,31 @@
+{
+    "file":  "terrain-world.pmtiles",
+    "source":  "https://download.mapterhorn.com/planet.pmtiles",
+    "sourceLastModified":  "2026-09-11T14:58:22Z",
+    "sourceETag":  "\"fa356a37f6efbb757fe00d1767bddf01-2650\"",
+    "sourceBytes":  355579263191,
+    "extractTool":  "go-pmtiles 1.31.2",
+    "bounds":  [
+                   -180,
+                   -85.0511288,
+                   180,
+                   85.0511288
+               ],
+    "minZoom":  0,
+    "maxZoom":  8,
+    "bytes":  3208209733,
+    "sha256":  "68ba733173ef03508537fc450c957ba045415cda33b53bf8aac7e362ec5c28e9",
+    "addressedTiles":  53097,
+    "tileEntries":  44642,
+    "distinctTileContents":  42299,
+    "format":  "PMTiles v3 / 512-pixel terrain RGB WebP / Terrarium encoding",
+    "contourIntervalMetres":  100,
+    "majorContourIntervalMetres":  500,
+    "contourMinimumDisplayZoom":  11,
+    "attribution":  "© Mapterhorn terrain sources",
+    "sourceAttributionFile":  "terrain-attribution.json",
+    "documentation":  "https://mapterhorn.com/data-access/",
+    "attributionDocumentation":  "https://mapterhorn.com/attribution/",
+    "notes":  "Worldwide Web Mercator terrain at zoom 0-8. Poles beyond +/-85.0511288 degrees are outside coverage. Shading and 3D work in the dashboard; contours are disabled because this package lacks zoom 11 data. Elevation detail is enlarged beyond zoom 8. Upstream is mutable; source ETag and extraction SHA-256 identify this download.",
+    "maxBytes":  4000000000
+}

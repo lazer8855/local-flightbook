@@ -31,7 +31,7 @@ for (const weight of [400, 600]) {
   }
 }
 const mapCSS = await readFile('node_modules/maplibre-gl/dist/maplibre-gl.css', 'utf8');
-const css = `${await readFile('src/style.css', 'utf8')}\n${await readFile('src/statistics.css', 'utf8')}`;
+const css = `${await readFile('src/style.css', 'utf8')}\n${await readFile('src/statistics.css', 'utf8')}\n${await readFile('src/dashboard.css', 'utf8')}`;
 let html = await readFile('src/index.html', 'utf8');
 html = html.replace('/* BUNDLED_STYLES */', `${fontCSS}\n${mapCSS}\n${css}`);
 html = html.replace('/* BUNDLED_APP */', () => app.outputFiles[0].text.replace(/<\/script/gi, '<\\/script'));

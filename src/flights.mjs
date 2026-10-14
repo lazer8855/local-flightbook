@@ -43,8 +43,12 @@ export function validDate(value) {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
 }
 
+const sourceHandles = new WeakMap();
+export const getSourceHandle = flight => sourceHandles.get(flight);
+
 export function createManualFlight(input) {
   const flight = { format: 'local-flightbook', version: 1, id: crypto.randomUUID(), date: input.date, durationSeconds: Number(input.durationMinutes) * 60, site: input.site?.trim() || '', wing: input.wing?.trim() || '', notes: input.notes?.trim() || '' };
+  if (input.openXcDistanceKm !== undefined && String(input.openXcDistanceKm).trim() !== '') flight.openXcDistanceKm = Number(input.openXcDistanceKm);
   parseManualFlight(JSON.stringify(flight));
   return flight;
 }
@@ -55,7 +59,8 @@ export function parseManualFlight(text, path = '') {
   if (flight.version !== 1) throw new Error('Unsupported manual-flight version');
   if (typeof flight.id !== 'string' || !flight.id.trim() || !validDate(flight.date) || !Number.isFinite(flight.durationSeconds) || flight.durationSeconds <= 0) throw new Error('Invalid manual-flight ID, date, or duration');
   for (const key of ['site', 'wing', 'notes']) if (flight[key] !== undefined && typeof flight[key] !== 'string') throw new Error(`Invalid ${key}`);
-  return { ...flight, type: 'manual', path, points: [], distanceKm: null, warnings: [] };
+  if (flight.openXcDistanceKm !== undefined && (!Number.isFinite(flight.openXcDistanceKm) || flight.openXcDistanceKm < 0)) throw new Error('Open XC distance must be a finite, non-negative number');
+  return { ...flight, type: 'manual', path, points: [], distanceKm: null, warnings: [], xc: flight.openXcDistanceKm === undefined ? undefined : { open: { distanceKm: flight.openXcDistanceKm, source: 'manual' } } };
 }
 
 export function haversine(a, b) {
@@ -88,6 +93,7 @@ export async function scanFolder(directory, onProgress = () => {}) {
         hashes.set(digest, path);
         if (flight.type === 'manual') ids.add(flight.id);
         flight.key = digest;
+        if (flight.type === 'manual') sourceHandles.set(flight, entry);
         flights.push(flight);
       } catch (error) { issues.push({ path, message: error.message }); }
       if (examined % 10 === 0) { onProgress(examined); await new Promise(resolve => setTimeout(resolve, 0)); }

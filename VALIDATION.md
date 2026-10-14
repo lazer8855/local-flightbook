@@ -1,8 +1,9 @@
 # Prototype validation
 
 Validated by opening `dashboard.html` directly with a `file://` URL on Windows.
-No local HTTP server was used. Real native folder/save dialogs and browser
-permission prompts were exercised; file API methods were not mocked.
+No local HTTP server was used. The native integration suite exercises real
+folder/save dialogs and browser permission prompts. A separate controlled UI
+suite uses in-memory file handles to exercise write failures safely.
 
 | Browser | Version | Coverage |
 |---|---|---|
@@ -16,9 +17,16 @@ Machine-readable results are in `validation/chrome.json` and
 
 ## Confirmed behaviour
 
+- The redesigned dashboard has shared filters, Flightbook/Statistics tabs, four summary cells, adaptive activity bars, airtime calendars, two cumulative graphs, filtered records, distributions and a keyboard-accessible scatter plot. Controlled offline Chrome/Edge checks cover shared counts, date navigation, empty selections, range errors, manual/zero XC coverage, mobile layout, light/dark UI, cancellation/write failures and IGC overwrite protection. Reports: `validation/chrome-statistics-redesign.json` and `edge-statistics-redesign.json`; screenshots use the corresponding `statistics-redesign`, `statistics-mobile` and `statistics-mobile-dark` names.
+- Manual version-1 JSON accepts optional `openXcDistanceKm`. The native edit/copy suite tests real original-file replacement with the same ID, saving a copy with a new ID, cancellation preserving distance, rescanning and reopening. It uses isolated `.cache` files rather than private flight recordings. The Windows helper handles native overwrite prompts exposed as accessibility panes. Script: `scripts/validate-manual-native.mjs`.
+- Forty unit tests pass. New cases cover inclusive shared filtering, manual/zero/estimated/unknown distance, adaptive time buckets, excluded reference years, equal-year averages, zero matching periods, current-year cutoffs, leap-day alignment, distributions and backwards-compatible manual JSON. The average reference excludes the selected and current calendar years; missing distances remain unknown. Cumulative distance averages match card averages at the end of the period.
+- Full native integration passed in Chrome 154 and Edge 155 after the redesign: all 431 IGC files loaded, all 429 eligible tracks processed without XC errors, shared filters/statistics synchronized with maps, terrain/contours/3D and full-window controls worked, and manual distances were created, edited in place, copied with new IDs and reloaded. Both runs reported zero HTTP requests and zero browser console errors. Edge also verified list sorting preserves map zoom. Results are in `validation/chrome.json` and `validation/edge.json`.
+
+### Earlier prototype checks
+
 - Average comparisons were checked on the offline `file://` page in Chrome and Edge using controlled annual totals of 1 h, 1 h and 10 h. The baseline is 4 h, a 1 h June shows −75%, and the annual chart marker is at 40% of its 10 h scale. Cards, monthly bars, legend and calculation notes use averages. Unit tests also verify empty-month zeros and exclusion of unknown GPS distance from averages.
 
-- XC calculations use a bundled classic worker with `igc-xc-score` 1.8.0. Offline browser tests verify open/free/FAI distances, refinement without decreasing results, inclusive duration and XC filters, invalid ranges, duration sorting, map/heatmap filtering, clearing filters, and unknown manual distances. The full archive has 429 eligible tracks and two with fewer than five fixes. A separate complete run checked all 431 files with no calculation errors, valid triangle closure/FAI ratios, closing-gap deductions and plausible bounds relative to recorded track length (`validation/xc-archive.json`). Initial per-discipline budgets are 75 ms; results are explicitly time-limited estimates unless the optimizer proves optimality. Initial searches may find no triangle; these remain unknown until refinement, not zero. Statistics retain their year/month scope.
+- XC calculations use a bundled classic worker with `igc-xc-score` 1.8.0. Offline browser tests verify open/free/FAI distances, refinement without decreasing results, inclusive duration and XC filters, invalid ranges, duration sorting, map/heatmap filtering, clearing filters, and unknown manual distances. The full archive has 429 eligible tracks and two with fewer than five fixes. A separate complete run checked all 431 files with no calculation errors, valid triangle closure/FAI ratios, closing-gap deductions and plausible bounds relative to recorded track length (`validation/xc-archive.json`). Initial per-discipline budgets are 75 ms; results are explicitly time-limited estimates unless the optimizer proves optimality. Initial searches may find no triangle; these remain unknown until refinement, not zero. The redesign uses Open XC in dashboard statistics and retains triangle results in individual flight details.
 
 - Offline 3D terrain and elevated flight rendering passed in Chrome 154 and Edge 155. Browser checks cover actual GPU draw frames, one elevated segment per pair of GPS fixes, 60° initial tilt, full-window viewing, basemap reconnection during 3D, ground overview modes, and returning to flat 2D. Terrain uses a separate DEM source from hill shading, at exaggeration 1. Screenshots: `validation/artifacts/chrome-3d-flight.png` and `edge-3d-flight.png`.
 
