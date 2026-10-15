@@ -6,6 +6,7 @@ validation/
 *.pmtiles
 *.igc
 *.IGC
+flightbook-review.json
 *.zip
 skytraxx*/
 

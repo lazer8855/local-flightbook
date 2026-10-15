@@ -4,6 +4,7 @@ export function filterFlights(flights, filters = {}) {
   const text = search.trim().toLocaleLowerCase();
   const bounded = (value, min, max) => min === null && max === null || Number.isFinite(value) && (min === null || value >= min) && (max === null || value <= max);
   const result = flights.filter(flight =>
+    !flight.reviewExcluded &&
     (!from || flight.date && flight.date >= from) && (!to || flight.date && flight.date <= to) &&
     (!hideShort || flight.durationSeconds >= 60) &&
     [flight.date, flight.site, flight.wing, flight.path].join(' ').toLocaleLowerCase().includes(text) &&

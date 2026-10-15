@@ -17,6 +17,29 @@ Machine-readable results are in `validation/chrome.json` and
 
 ## Confirmed behaviour
 
+- Review update: all 47 tests pass, including duplicate retention, UTC/local
+  date boundaries, start-time tolerance, track similarity, separate short and
+  suspicious findings, malformed records, review schema validation, reversible
+  exclusions and compatible manual start-time fields.
+- Controlled offline Chrome 155.0.8059.40 and Edge 155.0.4283.45 checks cover
+  review categories, ignore/restore, count-only/exclude/include, reopening saved
+  decisions, permission denial, create/write failures and retry, external-change
+  protection, invalid review files, manual start-time edits, responsive light/dark
+  UI and zero HTTP requests or browser errors. Existing statistics/edit/copy
+  UI checks also pass. Reports: `validation/chrome-review.json` and
+  `validation/edge-review.json`; run `npm run test:review-ui`.
+- Local Europe PMTiles background, all-track overlays and heatmaps were also
+  checked in both browsers: excluding one duplicate removed its track from each
+  overview while preserving explicit individual preview. A read-only scan of
+  the supplied 431-flight archive produced 44 short and 137 suspicious findings
+  in approximately 84 ms of detection time. These are warnings, not confirmed
+  broken flights; nothing was excluded or written to the private archive.
+- Real Chrome and Edge folder dialogs and review-file writes passed using
+  isolated nested scratch folders with spaces/umlauts. Saved exclusions persisted
+  after reopening, restored inclusion was saved, and original IGC bytes stayed
+  unchanged. Reports: `validation/review-native-chrome.json` and
+  `validation/review-native-edge.json`; run `npm run test:review-native`.
+
 - The redesigned dashboard has shared filters, Flightbook/Statistics tabs, four summary cells, adaptive activity bars, airtime calendars, two cumulative graphs, filtered records, distributions and a keyboard-accessible scatter plot. Controlled offline Chrome/Edge checks cover shared counts, date navigation, empty selections, range errors, manual/zero XC coverage, mobile layout, light/dark UI, cancellation/write failures and IGC overwrite protection. Reports: `validation/chrome-statistics-redesign.json` and `edge-statistics-redesign.json`; screenshots use the corresponding `statistics-redesign`, `statistics-mobile` and `statistics-mobile-dark` names.
 - Manual version-1 JSON accepts optional `openXcDistanceKm`. The native edit/copy suite tests real original-file replacement with the same ID, saving a copy with a new ID, cancellation preserving distance, rescanning and reopening. It uses isolated `.cache` files rather than private flight recordings. The Windows helper handles native overwrite prompts exposed as accessibility panes. Script: `scripts/validate-manual-native.mjs`.
 - Forty unit tests pass. New cases cover inclusive shared filtering, manual/zero/estimated/unknown distance, adaptive time buckets, excluded reference years, equal-year averages, zero matching periods, current-year cutoffs, leap-day alignment, distributions and backwards-compatible manual JSON. The average reference excludes the selected and current calendar years; missing distances remain unknown. Cumulative distance averages match card averages at the end of the period.

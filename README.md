@@ -184,7 +184,8 @@ Attribution links only navigate to their websites when explicitly clicked.
 
 Flight dates come from IGC headers or manual JSON, never folder names. Missing
 or invalid dates are shown for review. Byte-identical files and repeated manual
-IDs are skipped; different recordings on the same day remain separate flights.
+IDs are retained and flagged in Review. All files count until you explicitly
+exclude an entry; duplicate files are no longer silently skipped.
 Invalid GPS fixes are skipped. Recordings under one minute are flagged and remain
 included in prototype summary totals. Recorded time is the span between first
 and last valid fixes, which may include waiting before/after flight. It is not
@@ -214,6 +215,43 @@ a selected manual entry. The save dialog suggests its original file and folder:
 choosing the original updates it with the same ID; choosing another JSON file
 creates a copy with a new ID. Cancellation/failure keeps the form, and IGC files
 cannot be overwritten. Files are rescanned after saving.
+
+Manual files may also include optional `startTime` (`HH:mm`, local time) and
+`startTimeUtc` (ISO UTC timestamp). The form stores both when you enter a start
+time, using your browser's local time zone, including its daylight-saving offset
+for that date. Existing files without a start time remain compatible. Unchanged
+timestamps keep their stored UTC instant when edited in another time zone.
+
+## Review duplicates and questionable flights
+
+The **Review** tab checks the full archive independently of shared filters:
+
+- Exact file duplicates (SHA-256) and repeated manual-flight IDs.
+- Similar IGC recordings: nearby start times, overlapping periods and matching
+  sampled positions. Nearby pilots can produce similar tracks; review manually.
+- Manual/IGC matches: UTC start times within a configurable tolerance (default
+  5 minutes). Without a manual start time, matching local date and similar
+  duration produce a lower-confidence suggestion, not a confirmed duplicate.
+- Recordings under a configurable threshold (default 1 minute), separately
+  from suspicious files with missing dates, insufficient/invalid fixes, malformed
+  records, unordered timestamps, GPS jumps above 200 km/h or gaps over 10 minutes.
+- Files that could not be imported, with their paths and error messages.
+
+Open candidates side by side, **Ignore warning**, **Exclude flight**, or
+**Count only this entry** in a duplicate/matching group. Exclusions immediately
+affect Flightbook, statistics, comparisons and map overviews. Opening an excluded
+flight deliberately previews its track individually. Ignore does not exclude;
+all decisions can be reversed, and excluded flights remain listed for recovery.
+Manual notes remain on their original entry; review does not merge or delete files.
+
+Click **Save decisions** and approve folder write access when requested. Only
+`flightbook-review.json` in the selected root folder is written; IGC and manual
+JSON files remain untouched. The version-1 review file stores exclusions,
+ignored findings and thresholds. It is read again when you reconnect the folder.
+Unsaved changes survive rescans and save failures; reconnecting warns before
+discarding them. Invalid review files and external changes are protected from
+overwrite. Review identities use relative file paths plus content hashes for
+IGC or IDs for manual entries; renamed/moved files must be reviewed again.
 
 ## Shared dashboard and statistics
 

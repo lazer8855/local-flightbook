@@ -7,7 +7,9 @@
     "build": "node scripts/build.mjs",
     "test": "node --test tests/*.test.mjs",
     "test:browser": "node scripts/validate-browser.mjs",
-    "test:statistics-ui": "node scripts/validate-statistics-ui.mjs"
+    "test:statistics-ui": "node scripts/validate-statistics-ui.mjs",
+    "test:review-ui": "node scripts/validate-review-ui.mjs",
+    "test:review-native": "node scripts/validate-review-native.mjs"
   },
   "dependencies": {
     "@fontsource/noto-sans": "5.3.0",

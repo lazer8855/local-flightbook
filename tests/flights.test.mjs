@@ -57,7 +57,9 @@ test('Recursive scanning handles arbitrary names, copies, manual IDs, and bad fi
     'invalid.json': '{', 'unrelated.json': '{}', 'ignored.txt': 'whatever',
     'second.igc': igc('120622')
   }));
-  assert.equal(result.flights.length, 3); assert.equal(result.issues.length, 3);
+  assert.equal(result.flights.length, 5); assert.equal(result.issues.length, 1);
+  assert.equal(new Set(result.flights.map(f=>f.key)).size,5);
+  assert.equal(result.flights.filter(f=>f.type==='igc'&&f.date==='2022-06-11').map(f=>f.contentHash).every((hash,_,values)=>hash===values[0]),true);
   assert.equal(result.flights[0].date, '2026-10-13');
   assert.ok(result.flights.some(flight => flight.path.includes('Flights ü/Site folder')));
 });

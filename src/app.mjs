@@ -2,6 +2,7 @@ import * as maplibre from 'maplibre-gl';
 import { PMTiles, FileSource, Protocol } from 'pmtiles';
 import { scanFolder, createManualFlight, getSourceHandle } from './flights.mjs';
 import { setupDashboard } from './dashboard-ui.mjs';
+import { setupReview } from './review-ui.mjs';
 import { buildMapOverview, EMPTY_MAP_DATA } from './map-overview.mjs';
 import { createTerrain, terrainSources, terrainLayers, contourLabelData } from './terrain.mjs';
 import { trackRates, RATE_COLOR } from './track-rate.mjs';
@@ -18,6 +19,7 @@ const xcCache = new Map();
 let xcController = null, xcRefreshTimer = null, xcRevision = 0;
 let map = null, markers = [], busy = false, mapGeneration = 0;
 let dashboard = null;
+let review = null;
 let editingManual = null;
 let terrain = null, terrainGeneration = 0, terrainApplyQueued = false;
 let terrainLabelSignature = '';
@@ -312,6 +314,8 @@ function selectFlight(flight, inspect = false) {
     const cell = node('div', ''); cell.append(node('small', label), node('strong', String(value))); grid.append(cell);
   }
   $('flight-detail').append(heading, node('p', flight.path, 'path'), grid);
+  if(flight.reviewExcluded)$('flight-detail').append(node('p','Excluded flight — individual preview only. Restore inclusion in Review to count it in totals and map overviews.','warning'));
+  if(flight.type==='manual'&&flight.startTime)$('flight-detail').append(node('p',`Manual start: ${flight.date} ${flight.startTime}${flight.startTimeUtc?` · ${flight.startTimeUtc} UTC`:' · local time (no stored UTC offset)'}`,'muted'));
   const xcDetail = node('div', '', 'xc-detail'); xcDetail.id = 'xc-detail'; $('flight-detail').append(xcDetail); renderXCDetail();
   if (flight.type === 'manual') {
     const edit = node('button', 'Edit manual flight', 'secondary'); edit.id = 'edit-manual'; edit.type = 'button';
@@ -347,6 +351,7 @@ async function rescan() {
   try {
     const result = await scanFolder(state.directory, count => setStatus(`Scanning… ${count} candidate files read.`));
     state.flights = result.flights; state.issues = result.issues;
+    await review?.load();
     for (const flight of state.flights) if (xcCache.has(flight.key)) flight.xc = xcCache.get(flight.key);
     dashboard?.refresh();
     const selectedKey = state.selected?.key;
@@ -355,7 +360,6 @@ async function rescan() {
     $('airtime').textContent = duration(state.flights.reduce((sum, flight) => sum + flight.durationSeconds, 0));
     $('years').textContent = new Set(state.flights.filter(flight => flight.date).map(flight => flight.date.slice(0, 4))).size;
     const warnings = state.flights.filter(flight => flight.warnings.length);
-    $('review-count').textContent = warnings.length + state.issues.length;
     $('folder-name').textContent = state.directory.name;
     const issues = node('ul', '');
     for (const issue of [...state.issues, ...warnings.map(flight => ({ path: flight.path, message: flight.warnings.join(' · ') }))]) issues.append(node('li', `${issue.path}: ${issue.message}`));
@@ -373,7 +377,8 @@ async function rescan() {
 }
 
 $('folder').addEventListener('click', async () => {
-  try { state.directory = await window.showDirectoryPicker({ mode: 'read' }); dashboard?.reset(); await rescan(); }
+  if(review?.dirty&&!window.confirm('Unsaved review decisions will be discarded when reconnecting a folder. Continue?'))return;
+  try { state.directory = await window.showDirectoryPicker({ mode: 'read' }); review?.reconnect(); dashboard?.reset(); await rescan(); }
   catch (error) { setStatus(cancelled(error) ? 'Folder selection cancelled or access not granted. Click Choose flight folder to retry.' : `Folder access failed: ${error.message}. Retry in desktop Chrome or Edge.`); }
 });
 $('rescan').addEventListener('click', rescan);
@@ -426,6 +431,8 @@ function openManual(flight = null) {
   $('manual-title').textContent = flight ? 'Edit manual flight' : 'Add a manual flight';
   $('manual-help').textContent = flight ? 'Choose the original JSON file to update it and keep its ID. Choosing another file creates a copy with a new ID. IGC files cannot be overwritten.' : 'Save a flightbook JSON file inside your connected flight folder. Open XC distance is optional; blank means unavailable, zero means zero kilometres.';
   for (const [key,value] of Object.entries(flight ? { date:flight.date,durationMinutes:flight.durationSeconds/60,site:flight.site||'',wing:flight.wing||'',notes:flight.notes||'',openXcDistanceKm:flight.openXcDistanceKm??'' } : {date:new Date().toLocaleDateString('en-CA')})) form.elements[key].value = value;
+  form.elements.startTime.value=flight?.startTime||'';
+  $('manual-time-zone').textContent=`Times are entered in ${Intl.DateTimeFormat().resolvedOptions().timeZone}; the UTC instant is stored for matching IGC recordings. Leave blank if unknown.`;
   $('manual-dialog').showModal();
 }
 $('add-manual').addEventListener('click', () => openManual());
@@ -441,6 +448,8 @@ $('manual-form').addEventListener('submit', async event => {
     const handle = await window.showSaveFilePicker({ suggestedName: originalHandle?.name || `${flight.date}-manual-${flight.id.slice(0, 8)}.json`, ...(originalHandle || state.directory ? { startIn: originalHandle || state.directory } : {}), types: [{ description: 'Flightbook JSON', accept: { 'application/json': ['.json'] } }] });
     if (/\.igc$/i.test(handle.name)) throw new Error('IGC files cannot be overwritten. Select a .json file.');
     if (!/\.json$/i.test(handle.name)) throw new Error('Choose a .json filename.');
+    if(handle.name.toLowerCase()==='flightbook-review.json')throw new Error('This filename is reserved for review decisions. Choose another JSON file.');
+    if(editingManual?.startTimeUtc&&flight.date===editingManual.date&&flight.startTime===editingManual.startTime)flight.startTimeUtc=editingManual.startTimeUtc;
     if (originalHandle && await handle.isSameEntry(originalHandle)) flight.id = editingManual.id;
     const writable = await handle.createWritable();
     try { await writable.write(`${JSON.stringify(flight, null, 2)}\n`); await writable.close(); }
@@ -465,6 +474,7 @@ if (!window.isSecureContext || !('showDirectoryPicker' in window) || !('showSave
 ensureMap();
 
 dashboard = setupDashboard(() => state.flights, change => change?.sortOnly ? renderFlights() : refreshLibrary(true), flight => selectFlight(flight, true), () => requestAnimationFrame(() => map?.resize()));
+review = setupReview(()=>state.flights,()=>state.issues,()=>state.directory,()=>{dashboard?.refresh();refreshLibrary();},flight=>dashboard.inspect(flight));
 
 // Read-only validation data; no handles, mutation methods, or remote services.
 Object.defineProperty(window, 'flightbookDiagnostics', { get: () => ({
@@ -500,6 +510,9 @@ Object.defineProperty(window, 'flightbookDiagnostics', { get: () => ({
   statisticsPeriod: dashboard.filters,
   statisticsSummary: dashboard.model.summary,
   dashboardView: dashboard.view,
+  reviewFindings: review?.findings.length || 0,
+  reviewExcluded: review?.excludedCount || 0,
+  reviewDirty: review?.dirty || false,
   statisticsGranularity: dashboard.model.granularity,
   referenceYears: dashboard.model.referenceYears,
   selectedManualId: state.selected?.type === 'manual' ? state.selected.id : null,

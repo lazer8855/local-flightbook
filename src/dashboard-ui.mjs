@@ -62,11 +62,12 @@ export function setupDashboard(getFlights,onChange,onInspect,onViewChange) {
   }
   function chooseView(value){
     view=value;
-    $('flightbook-view').hidden=view!=='flightbook';$('statistics-view').hidden=view!=='statistics';
+    $('flightbook-view').hidden=view!=='flightbook';$('statistics-view').hidden=view!=='statistics';$('review-view').hidden=view!=='review';
+    document.querySelector('.shared-controls').hidden=view==='review';
     for(const button of document.querySelectorAll('[data-view]')){button.setAttribute('aria-selected',String(button.dataset.view===view));button.tabIndex=button.dataset.view===view?0:-1;}
     onViewChange?.(view);
   }
-  $('view-tabs').addEventListener('keydown',event=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();chooseView(event.key==='Home'?'flightbook':event.key==='End'?'statistics':view==='flightbook'?'statistics':'flightbook');document.querySelector(`[data-view="${view}"]`).focus();});
+  $('view-tabs').addEventListener('keydown',event=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();const views=['flightbook','statistics','review'];chooseView(event.key==='Home'?views[0]:event.key==='End'?views.at(-1):views[(views.indexOf(view)+(event.key==='ArrowRight'?1:2))%3]);document.querySelector(`[data-view="${view}"]`).focus();});
   function inspect(flight){chooseView('flightbook');onInspect(flight);$('flight-detail').scrollIntoView({block:'nearest',behavior:'smooth'});}
   function dateTitle(){return filters.mode==='all'?'All time':filters.from&&filters.to?`${filters.from} – ${filters.to}`:filters.from?`From ${filters.from}`:filters.to?`Until ${filters.to}`:'Custom dates';}
   function renderChips(){
