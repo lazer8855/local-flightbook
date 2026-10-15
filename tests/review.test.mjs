@@ -39,15 +39,38 @@ test('similar IGC recordings require track proximity and temporal overlap',()=>{
   assert.equal(buildReview([a,igc('far.igc','far','100100','101100','4800000N')]).length,0);
   assert.equal(buildReview([a,igc('later.igc','later','100500','101500')]).length,0);
 });
-test('short and suspicious findings remain distinct, with malformed timestamps, GPS jumps and gaps explained',()=>{
+test('short and suspicious findings remain distinct, with malformed timestamps and gaps explained',()=>{
   const short=igc('short.igc','short','100000','100030');
   assert.deepEqual(buildReview([short]).map(f=>f.category),['short']);
   const broken={...parseIGC('HFDTE010626\nB1000004700000N00800000EA0050000600\nB0959004700000N00800000EA0050000600\nB1000014800000N00800000EA0050000600\nB1015004800000N00800000EA0050000600\nBxxx','broken.igc'),key:'broken'};
   const finding=buildReview([broken]).find(f=>f.category==='suspicious');
   assert.match(finding.reasons.join(' '),/out-of-order/);assert.match(finding.reasons.join(' '),/malformed/);
-  assert.match(finding.reasons.join(' '),/200 km\/h/);assert.match(finding.reasons.join(' '),/10 minutes/);
+  assert.doesNotMatch(finding.reasons.join(' '),/200 km\/h/);assert.match(finding.reasons.join(' '),/10 minutes/);
   assert.ok(buildReview([parseIGC('AXXX','empty.igc')]).some(f=>f.category==='suspicious'));
   assert.equal(buildReview([], [{path:'bad.json',message:'Invalid JSON'}])[0].category,'import');
+});
+test('repeated timestamps and GPS jumps do not produce review warnings',()=>{
+  const flight={...parseIGC('HFDTE010626\nB1000004700000N00800000EA0050000600\nB1000004700000N00800000EA0050000600\nB1000014800000N00800000EA0050000600\nB1001004800000N00800000EA0050000600\n','jumps.igc'),key:'jumps'};
+  assert.equal(flight.points.length,3);
+  assert.deepEqual(flight.warnings,[]);
+  assert.deepEqual(buildReview([flight]),[]);
+});
+test('invalid GPS fix allowance is inclusive, persisted and backward compatible without hiding other problems',()=>{
+  const flight={...parseIGC('HFDTE010626\nB1000004700000N00800000EA0050000600\nB1000014700000N00800000EV0050000600\nB1000024700000N00800000EV0050000600\nB1000034700000N00800000EV0050000600\nB1010004700000N00800000EA0050000600\n','invalid.igc'),key:'invalid'};
+  assert.equal(flight.invalidFixes,3);
+  const decisions=emptyReview();
+  assert.equal(decisions.settings.maxInvalidFixes,15);
+  assert.deepEqual(buildReview([flight],[],decisions),[]);
+  decisions.settings.maxInvalidFixes=0;
+  assert.match(buildReview([flight],[],decisions)[0].reasons.join(' '),/3 invalid GPS/);
+  decisions.settings.maxInvalidFixes=2;assert.equal(buildReview([flight],[],decisions).length,1);
+  decisions.settings.maxInvalidFixes=3;assert.deepEqual(buildReview([flight],[],decisions),[]);
+  applyReview([flight],decisions);assert.deepEqual(flight.reviewWarnings,[]);assert.equal(flight.warnings.length,1);
+  assert.equal(parseReview(JSON.stringify(decisions)).settings.maxInvalidFixes,3);
+  assert.equal(parseReview(JSON.stringify({...emptyReview(),settings:{shortSeconds:60,toleranceMinutes:5}})).settings.maxInvalidFixes,15);
+  const broken={...flight,warnings:[...flight.warnings,'Not enough valid GPS fixes']};
+  assert.match(buildReview([broken],[],decisions)[0].reasons.join(' '),/Not enough/);
+  for(const maxInvalidFixes of [-1,1.5,'3',null,1e20])assert.throws(()=>parseReview(JSON.stringify({...decisions,settings:{...decisions.settings,maxInvalidFixes}})));
 });
 test('review schema rejects invalid files and decisions exclude consistently, survive manual edits and restore',()=>{
   const a=igc(),m=manual(),decisions=emptyReview();decisions.excluded=[reviewIdentity(a),reviewIdentity(m)];

@@ -1,7 +1,7 @@
 import { haversine, validDate } from './flights.mjs';
 
 export const REVIEW_FILENAME = 'flightbook-review.json';
-export const DEFAULT_REVIEW_SETTINGS = { shortSeconds: 60, toleranceMinutes: 5 };
+export const DEFAULT_REVIEW_SETTINGS = { shortSeconds: 60, toleranceMinutes: 5, maxInvalidFixes: 15 };
 export const emptyReview = () => ({ format:'local-flightbook-review', version:1, excluded:[], ignored:[], settings:{...DEFAULT_REVIEW_SETTINGS} });
 // A path distinguishes physical copies. Manual IDs survive edits to the same file.
 export const reviewIdentity = f => JSON.stringify([f.path, f.type === 'manual' ? f.id : f.contentHash || f.key]);
@@ -11,11 +11,19 @@ export function parseReview(text) {
   for(const key of ['excluded','ignored'])if(!Array.isArray(value[key])||value[key].some(v=>typeof v!=='string'))throw new Error(`Invalid review ${key}`);
   const settings={...DEFAULT_REVIEW_SETTINGS,...value.settings};
   if(!Number.isFinite(settings.shortSeconds)||settings.shortSeconds<0||settings.shortSeconds>86400||!Number.isFinite(settings.toleranceMinutes)||settings.toleranceMinutes<0||settings.toleranceMinutes>120)throw new Error('Invalid review thresholds');
+  if(!Number.isSafeInteger(settings.maxInvalidFixes)||settings.maxInvalidFixes<0)throw new Error('Allowed invalid GPS fixes must be a non-negative whole number');
   return {...emptyReview(),excluded:[...new Set(value.excluded)],ignored:[...new Set(value.ignored)],settings};
 }
 export function applyReview(flights, decisions) {
   const excluded=new Set(decisions.excluded);
-  for(const f of flights)f.reviewExcluded=excluded.has(reviewIdentity(f));
+  for(const f of flights){f.reviewExcluded=excluded.has(reviewIdentity(f));f.reviewWarnings=reviewWarnings(f,decisions.settings);}
+}
+export function reviewWarnings(flight,settings={}){
+  const allowed=settings.maxInvalidFixes??DEFAULT_REVIEW_SETTINGS.maxInvalidFixes;
+  return flight.warnings.filter(reason=>{
+    const match=reason.match(/^(\d+) invalid GPS fixes skipped$/);
+    return !match||Number(match[1])>allowed;
+  });
 }
 export function flightStart(f) {
   if(f.type==='igc')return validDate(f.date)&&f.points.length?Date.parse(`${f.date}T00:00:00Z`)+f.points[0].time*1000:null;
@@ -35,14 +43,12 @@ export function buildReview(flights,issues=[],decisions=emptyReview()) {
     if(f.type==='manual'){if(!byID.has(f.id))byID.set(f.id,[]);byID.get(f.id).push(f);}
     if(f.durationSeconds<settings.shortSeconds)add('short',[f],[`Recorded duration ${Math.round(f.durationSeconds)} sec is under ${settings.shortSeconds/60} min. Short does not necessarily mean broken.`]);
     if(f.type!=='igc')continue;
-    const reasons=f.warnings.filter(w=>!w.startsWith('Short recording'));
-    let jumps=0,gaps=0;
+    const reasons=reviewWarnings(f,settings).filter(w=>!w.startsWith('Short recording')).map(reason=>/^\d+ invalid GPS fixes skipped$/.test(reason)?`${reason} (allowed: ${settings.maxInvalidFixes??DEFAULT_REVIEW_SETTINGS.maxInvalidFixes})`:reason);
+    let gaps=0;
     for(let i=1;i<f.points.length;i++){
       const seconds=f.points[i].time-f.points[i-1].time;
       if(seconds>600)gaps++;
-      if(seconds>0&&haversine(f.points[i-1],f.points[i])/seconds*3600>200)jumps++;
     }
-    if(jumps)reasons.push(`${jumps} GPS segments imply speed over 200 km/h; possible GPS jumps.`);
     if(gaps)reasons.push(`${gaps} gaps longer than 10 minutes; recorded airtime includes gaps.`);
     if(reasons.length)add('suspicious',[f],reasons);
   }

@@ -24,7 +24,7 @@ export function parseIGC(text, path = '') {
     if (Number(hh) > 23 || Number(mm) > 59 || Number(ss) > 59 || latMinutes >= 60 || lonMinutes >= 60 || Math.abs(lat) > 90 || Math.abs(lon) > 180) { malformedFixes++; continue; }
     if (previousTime >= 0 && seconds + dayOffset < previousTime - 43200) dayOffset += 86400;
     const time = seconds + dayOffset;
-    if (time <= previousTime) { unorderedFixes++; continue; }
+    if (time <= previousTime) { if(time < previousTime)unorderedFixes++; continue; }
     points.push({ lon, lat, time, pressureAltitude: Number(pressure), gpsAltitude: Number(gps) });
     previousTime = time;
   }
@@ -35,10 +35,10 @@ export function parseIGC(text, path = '') {
   if (durationSeconds < 60) warnings.push('Short recording (<1 minute)');
   if (invalidFixes) warnings.push(`${invalidFixes} invalid GPS fixes skipped`);
   if (malformedFixes) warnings.push(`${malformedFixes} malformed GPS records skipped`);
-  if (unorderedFixes) warnings.push(`${unorderedFixes} repeated or out-of-order timestamps skipped`);
+  if (unorderedFixes) warnings.push(`${unorderedFixes} out-of-order timestamps skipped`);
   let distanceKm = 0;
   for (let i = 1; i < points.length; i++) distanceKm += haversine(points[i - 1], points[i]);
-  return { type: 'igc', path, date, durationSeconds, site: header('SITE').replace(/^Unknown$/i, ''), wing: header('GLIDERTYPE'), points, distanceKm, warnings };
+  return { type: 'igc', path, date, durationSeconds, site: header('SITE').replace(/^Unknown$/i, ''), wing: header('GLIDERTYPE'), points, distanceKm, invalidFixes, warnings };
 }
 
 export function validDate(value) {

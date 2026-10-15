@@ -11,7 +11,7 @@ for(const [label,executablePath]of [['chrome','C:/Program Files/Google/Chrome/Ap
     await context.addInitScript(()=>{
       const storageKey='flightbook-review-test-files';
       const track=(time,end,header='')=>`AXXX\nHFDTE010626\n${header}\nB${time}4700000N00800000EA0050000600\nB${end}4700000N00800000EA0050000600\n`;
-      const initial={'Flüge ü/a.igc':track('100000','101000'),'Flüge ü/copy.IGC':track('100000','101000'),'elsewhere/similar.igc':track('100100','101100','HFSITSITE:Device two'),'short.igc':track('110000','110030'),'manual.json':JSON.stringify({format:'local-flightbook',version:1,id:'manual',date:'2026-06-01',startTime:'12:00',startTimeUtc:'2026-06-01T10:00:00.000Z',durationSeconds:600,openXcDistanceKm:6,notes:'Retain these notes'}),'bad.json':'{'};
+      const initial={'Flüge ü/a.igc':track('100000','101000'),'Flüge ü/copy.IGC':track('100000','101000'),'elsewhere/similar.igc':track('100100','101100','HFSITSITE:Device two\nB1000594700000N00800000EV0050000600\nB1000584700000N00800000EV0050000600'),'short.igc':track('110000','110030'),'manual.json':JSON.stringify({format:'local-flightbook',version:1,id:'manual',date:'2026-06-01',startTime:'12:00',startTimeUtc:'2026-06-01T10:00:00.000Z',durationSeconds:600,openXcDistanceKm:6,notes:'Retain these notes'}),'bad.json':'{'};
       const files=new Map(Object.entries(JSON.parse(localStorage.getItem(storageKey)||JSON.stringify(initial))));
       const persist=()=>localStorage.setItem(storageKey,JSON.stringify(Object.fromEntries(files)));
       window.testOriginals=()=>Object.fromEntries([...files].filter(([key])=>key!=='flightbook-review.json'));
@@ -42,6 +42,15 @@ for(const [label,executablePath]of [['chrome','C:/Program Files/Google/Chrome/Ap
     assert.equal(await page.locator('.review-finding[data-category=manual-match]').count(),3);
     assert.equal(await page.locator('.review-finding[data-category=short]').count(),1);
     assert.equal(await page.locator('.review-finding[data-category=import]').count(),1);
+    assert.equal(await page.locator('#review-invalid-fixes').inputValue(),'15');
+    assert.equal(await page.locator('.review-finding[data-category=suspicious]').count(),0);
+    await page.locator('#review-invalid-fixes').fill('0');await page.locator('#review-invalid-fixes').press('Tab');
+    assert.equal(await page.locator('.review-finding[data-category=suspicious]').count(),1);
+    await page.locator('#review-invalid-fixes').fill('2');await page.locator('#review-invalid-fixes').press('Tab');
+    assert.equal(await page.locator('.review-finding[data-category=suspicious]').count(),0);
+    await page.locator('#review-invalid-fixes').fill('1');await page.locator('#review-invalid-fixes').press('Tab');
+    assert.equal(await page.locator('.review-finding[data-category=suspicious]').count(),1);
+    await page.locator('#review-invalid-fixes').fill('2');await page.locator('#review-invalid-fixes').press('Tab');
     await page.locator('#review-category').selectOption('exact');
     await page.locator('.review-file').first().getByRole('button',{name:'Count only this entry',exact:true}).click();
     assert.equal((await diagnostics()).reviewExcluded,1);assert.equal((await diagnostics()).statisticsSummary.count,4);
@@ -69,10 +78,12 @@ for(const [label,executablePath]of [['chrome','C:/Program Files/Google/Chrome/Ap
     await page.waitForFunction(()=>!window.flightbookDiagnostics.reviewDirty);
     const saved=JSON.parse(await page.evaluate(()=>window.testRead('flightbook-review.json')));
     assert.equal(saved.excluded.length,1);assert.equal(saved.ignored.length,1);
+    assert.equal(saved.settings.maxInvalidFixes,2);
     assert.deepEqual(await page.evaluate(()=>window.testOriginals()),originals);
     await page.reload();await page.locator('#folder').click();await page.waitForFunction(()=>window.flightbookDiagnostics.flightCount===5);
     assert.equal((await diagnostics()).reviewExcluded,1);assert.equal((await diagnostics()).statisticsSummary.count,4);
     await page.locator('#tab-review').click();await page.locator('#review-category').selectOption('exact');assert.equal(await page.locator('.review-finding').count(),0);
+    assert.equal(await page.locator('#review-invalid-fixes').inputValue(),'2');
     await page.locator('#review-show-ignored').check();await page.getByRole('button',{name:'Restore warning',exact:true}).click();
     await page.locator('.review-file').nth(1).getByRole('button',{name:'Include flight',exact:true}).click();assert.equal((await diagnostics()).statisticsSummary.count,5);
     await page.locator('#review-short-minutes').fill('20');await page.locator('#review-short-minutes').press('Tab');

@@ -322,7 +322,7 @@ function selectFlight(flight, inspect = false) {
     edit.addEventListener('click', () => openManual(flight)); $('flight-detail').append(edit);
   }
   if (flight.notes) $('flight-detail').append(node('p', flight.notes));
-  if (flight.warnings.length) $('flight-detail').append(node('p', `Review: ${flight.warnings.join(' · ')}`, 'muted'));
+  if (flight.warnings.length) $('flight-detail').append(node('p', `Recording notes: ${flight.warnings.join(' · ')}`, 'muted'));
   if (state.bounds && flight.points.some(p => p.lon < state.bounds[0] || p.lon > state.bounds[2] || p.lat < state.bounds[1] || p.lat > state.bounds[3])) $('flight-detail').append(node('p', 'This track extends beyond the local map coverage. Its GPS track still displays.', 'muted'));
   $('fit').disabled = !flight.points.length;
   renderFlights(); ensureMap(); drawFlight(); fitTrack();
@@ -337,13 +337,20 @@ function renderFlights() {
     button.type = 'button'; button.setAttribute('aria-pressed', String(state.selected === flight));
     button.append(node('strong', `${flight.date || 'Undated'} · ${duration(flight.durationSeconds)}`), node('small', `${flight.site || 'Unnamed site'} · ${flight.type === 'manual' ? 'Manual' : 'IGC'}`), node('small', flight.path));
     if (flight.points.length >= 5 || flight.xc?.open) button.append(node('small', `Open XC: ${flight.xcError ? 'Unavailable' : xcText(flight.xc?.open)}`));
-    if (flight.warnings.length) button.append(node('small', 'Needs review', 'warning'));
+    if ((flight.reviewWarnings||flight.warnings).length) button.append(node('small', 'Needs review', 'warning'));
     button.addEventListener('click', () => selectFlight(flight, true)); fragment.append(button);
   }
   if (!filtered.length) fragment.append(node('p', state.flights.length ? 'No flights match this filter.' : 'No flights loaded yet.', 'empty'));
   $('flight-list').replaceChildren(fragment);
 }
 
+function renderImportIssues(){
+  const warnings=state.flights.filter(flight=>(flight.reviewWarnings||flight.warnings).length);
+  const issues=node('ul','');
+  for(const issue of [...state.issues,...warnings.map(flight=>({path:flight.path,message:(flight.reviewWarnings||flight.warnings).join(' · ')}))])issues.append(node('li',`${issue.path}: ${issue.message}`));
+  $('issues').replaceChildren(issues.children.length?issues:node('p','No import warnings.'));
+  $('review-summary').textContent=`Import details and review (${warnings.length+state.issues.length})`;
+}
 async function rescan() {
   if (!state.directory || busy) return;
   busy = true; $('folder').disabled = true; $('rescan').disabled = true;
@@ -359,12 +366,8 @@ async function rescan() {
     $('flight-count').textContent = state.flights.length.toLocaleString();
     $('airtime').textContent = duration(state.flights.reduce((sum, flight) => sum + flight.durationSeconds, 0));
     $('years').textContent = new Set(state.flights.filter(flight => flight.date).map(flight => flight.date.slice(0, 4))).size;
-    const warnings = state.flights.filter(flight => flight.warnings.length);
     $('folder-name').textContent = state.directory.name;
-    const issues = node('ul', '');
-    for (const issue of [...state.issues, ...warnings.map(flight => ({ path: flight.path, message: flight.warnings.join(' · ') }))]) issues.append(node('li', `${issue.path}: ${issue.message}`));
-    $('issues').replaceChildren(issues.children.length ? issues : node('p', 'No import warnings.'));
-    $('review-summary').textContent = `Import details and review (${warnings.length + state.issues.length})`;
+    renderImportIssues();
     setStatus(`Loaded ${state.flights.length} flights from ${result.examined} candidate files. Folder names do not determine flight dates.`);
     renderFlights();
     const eligible = visibleFlights();
@@ -474,7 +477,7 @@ if (!window.isSecureContext || !('showDirectoryPicker' in window) || !('showSave
 ensureMap();
 
 dashboard = setupDashboard(() => state.flights, change => change?.sortOnly ? renderFlights() : refreshLibrary(true), flight => selectFlight(flight, true), () => requestAnimationFrame(() => map?.resize()));
-review = setupReview(()=>state.flights,()=>state.issues,()=>state.directory,()=>{dashboard?.refresh();refreshLibrary();},flight=>dashboard.inspect(flight));
+review = setupReview(()=>state.flights,()=>state.issues,()=>state.directory,()=>{dashboard?.refresh();refreshLibrary();renderImportIssues();},flight=>dashboard.inspect(flight));
 
 // Read-only validation data; no handles, mutation methods, or remote services.
 Object.defineProperty(window, 'flightbookDiagnostics', { get: () => ({

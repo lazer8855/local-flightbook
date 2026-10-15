@@ -46,9 +46,10 @@ export function setupReview(getFlights,getIssues,getDirectory,onChange,onInspect
   }
   $('save-review').addEventListener('click',save);
   for(const id of ['review-category','review-show-ignored','review-search'])$(id).addEventListener('input',render);
-  for(const [id,key,multiplier,max]of [['review-short-minutes','shortSeconds',60,1440],['review-tolerance','toleranceMinutes',1,120]])$(id).addEventListener('change',()=>{
+  for(const [id,key,multiplier,max]of [['review-short-minutes','shortSeconds',60,1440],['review-tolerance','toleranceMinutes',1,120],['review-invalid-fixes','maxInvalidFixes',1,Number.MAX_SAFE_INTEGER]])$(id).addEventListener('change',()=>{
     const value=$(id).valueAsNumber;
     if(!Number.isFinite(value)||value<0||value>max){$('review-save-status').textContent=`Enter a value from 0 to ${max}.`;return;}
+    if(key==='maxInvalidFixes'&&!Number.isSafeInteger(value)){$('review-save-status').textContent='Allowed invalid GPS fixes must be a non-negative whole number.';return;}
     change(()=>{decisions.settings[key]=value*multiplier;});
   });
   function exclude(flight,value){change(()=>{const key=reviewIdentity(flight);decisions.excluded=decisions.excluded.filter(id=>id!==key);if(value)decisions.excluded.push(key);});}
@@ -60,6 +61,7 @@ export function setupReview(getFlights,getIssues,getDirectory,onChange,onInspect
     $('review-overview').textContent=`${findings.filter(f=>!f.ignored).length} active findings · ${excluded} excluded files · ${findings.filter(f=>f.ignored).length} ignored findings${dirty?' · Unsaved decisions':''}`;
     $('save-review').disabled=!directory||!dirty||saving||blocked;$('save-review').textContent=saving?'Saving…':'Save decisions';
     $('review-short-minutes').value=decisions.settings.shortSeconds/60;$('review-tolerance').value=decisions.settings.toleranceMinutes;
+    $('review-invalid-fixes').value=decisions.settings.maxInvalidFixes;
     const category=$('review-category');if(category.options.length===1)for(const [key,label]of Object.entries(labels))category.add(new Option(label,key));
     $('review-category-counts').textContent=Object.entries(labels).map(([key,label])=>`${label}: ${findings.filter(f=>f.category===key&&!f.ignored).length}`).join(' · ');
     const search=$('review-search').value.trim().toLocaleLowerCase();

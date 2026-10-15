@@ -234,7 +234,12 @@ The **Review** tab checks the full archive independently of shared filters:
   duration produce a lower-confidence suggestion, not a confirmed duplicate.
 - Recordings under a configurable threshold (default 1 minute), separately
   from suspicious files with missing dates, insufficient/invalid fixes, malformed
-  records, unordered timestamps, GPS jumps above 200 km/h or gaps over 10 minutes.
+  records, out-of-order timestamps or gaps over 10 minutes. Repeated timestamps
+  are silently skipped; GPS jumps do not trigger review warnings.
+- **Allowed invalid GPS fixes** sets how many invalid (`V`) fixes may be skipped
+  without a warning. The default is 15; with 10 allowed, only recordings with
+  more than 10 invalid fixes are flagged for this reason. Other problems still
+  appear. Raw counts remain visible in flight details as recording notes.
 - Files that could not be imported, with their paths and error messages.
 
 Open candidates side by side, **Ignore warning**, **Exclude flight**, or
