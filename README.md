@@ -4,15 +4,15 @@ Double-click **dashboard.html** in desktop Chrome or Edge. No running server,
 Node installation, account, internet connection, or API key is needed to use it.
 If another browser is your default, right-click the HTML and use **Open with**.
 
-Download the [latest beta release](https://github.com/lazer8855/local-flightbook/releases/tag/v0.1.0-beta.2):
+Download the [latest beta release](https://github.com/lazer8855/local-flightbook/releases/tag/v0.1.0-beta.3):
 
-- [dashboard.html](https://github.com/lazer8855/local-flightbook/releases/download/v0.1.0-beta.2/dashboard.html) — the standalone dashboard.
+- [dashboard.html](https://github.com/lazer8855/local-flightbook/releases/download/v0.1.0-beta.3/dashboard.html) — the standalone dashboard.
 - [europe.pmtiles](https://github.com/lazer8855/local-flightbook/releases/download/v0.1.0-beta.2/europe.pmtiles) — Europe background map, 1.38 GB.
 - [terrain-alps.pmtiles](https://github.com/lazer8855/local-flightbook/releases/download/v0.1.0-beta.2/terrain-alps.pmtiles) — optional Alpine elevation for shading, contours and 3D, 1.59 GB.
 
 Map archives are release assets and are not included in a Git clone or the source-code ZIP. Checksums, map provenance and attribution are attached to the release. Downloading requires internet; using the downloaded dashboard and maps works offline.
 
-The beta includes every map listed below. Europe, Switzerland and Alpine terrain
+All maps listed below remain available from [beta 2](https://github.com/lazer8855/local-flightbook/releases/tag/v0.1.0-beta.2) and work with beta 3. Europe, Switzerland and Alpine terrain
 are direct PMTiles downloads. GitHub's per-asset size limit requires the two
 world archives to be supplied as numbered parts. Download both parts of the
 desired world archive and `join-world-maps.ps1` into one folder, then run:
@@ -105,7 +105,7 @@ powershell -File scripts/prepare-map.ps1 -Map world
 Add `-PMTilesExecutable <path>` when the tool is not in `.cache/pmtiles-tool/`.
 The script refuses to overwrite existing archives and verifies structure,
 checksums, and the world's size limit. `-Map europe` remains the default.
-All map packages are included in the linked beta release.
+All map packages remain attached to beta 2 and are compatible with beta 3.
 
 ## Map detail
 
@@ -145,7 +145,7 @@ archive. The source ETag matches the existing Alps terrain source. Recreate it
 with `powershell -File scripts/prepare-terrain.ps1 -Map world`, adding
 `-PMTilesExecutable <path>` if needed. The script refuses to overwrite an
 existing archive and verifies source ETag, size limit, structure, and checksum.
-This terrain package is included in the linked beta release as two parts.
+This terrain package is attached to beta 2 as two parts and works with beta 3.
 
 ## Alps terrain
 
