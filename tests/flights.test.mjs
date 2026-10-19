@@ -77,10 +77,11 @@ test('The supplied 431 IGC files scan without parse failures', async context => 
   const fixture = (await readdir('.', { withFileTypes: true })).find(entry => entry.isDirectory() && entry.name.startsWith('skytraxx'));
   if (!fixture) { context.skip('Private IGC archive is not included in the repository'); return; }
   const result = await scanFolder(diskDirectory(fixture.name));
-  assert.equal(result.examined, 431);
-  assert.equal(result.issues.filter(issue => !issue.message.startsWith('Duplicate')).length, 0);
-  assert.ok(result.flights.every(flight => flight.date && flight.points.length > 0));
-  const years = [...new Set(result.flights.map(flight => flight.date.slice(0, 4)))].sort();
+  const recordings=result.flights.filter(f=>f.type==='igc');
+  assert.equal(recordings.length, 431);
+  assert.equal(result.issues.filter(issue => /\.igc$/i.test(issue.path)).length, 0);
+  assert.ok(recordings.every(flight => flight.date && flight.points.length > 0));
+  const years = [...new Set(recordings.map(flight => flight.date.slice(0, 4)))].sort();
   assert.deepEqual(years, ['2014', '2015', '2016', '2017', '2018', '2019', '2020', '2021', '2022']);
-  console.log(JSON.stringify({ suppliedFiles: result.examined, uniqueFlights: result.flights.length, duplicateFiles: result.issues.length, shortRecordings: result.flights.filter(flight => flight.durationSeconds < 60).length }));
+  console.log(JSON.stringify({ suppliedIGCFiles: recordings.length, candidateFiles:result.examined, uniqueFlights: result.flights.length, shortIGCRecordings: recordings.filter(flight => flight.durationSeconds < 60).length }));
 });

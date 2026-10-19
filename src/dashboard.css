@@ -100,3 +100,17 @@ body.statistics-window-open{overflow:hidden}
 .statistics-window-content .horizontal-years .column-value{font-size:10px;line-height:1}
 .statistics-window-content svg{display:block;width:100%;height:auto;max-height:calc(100dvh - 210px)}
 @media(max-width:600px){.statistics-window-heading{padding:12px}.statistics-window-heading h2{font-size:16px}.statistics-window-content{padding:10px}.statistics-window-content>.stat-expandable{padding:16px}}
+.flight-analysis{padding:12px 18px;border-top:1px solid var(--line)}
+.analysis-heading{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}.analysis-heading h3{margin:0}
+.analysis-heading label{display:flex;gap:8px;align-items:center;font-size:11px}.analysis-heading input{width:auto;margin:0}
+.flight-analysis .muted{font-size:10px;line-height:1.5;margin:6px 0;overflow-wrap:anywhere}
+.flight-profile{width:100%;height:190px;touch-action:none;cursor:crosshair}
+.flight-profile svg{display:block;width:100%;height:100%;overflow:visible}
+.profile-gps{fill:none;stroke:#187ec5;stroke-width:1.8}.profile-baro{fill:none;stroke:#e68724;stroke-width:1.3}
+.profile-ground{fill:#89958e66;stroke:#758277;stroke-width:1}.profile-cursor{stroke:#d529b0;stroke-width:1.5;stroke-dasharray:4 3}
+.timeline-label{display:block;font-size:10px;color:var(--muted)}.timeline-label input{padding:0;margin:5px 0;accent-color:#d529b0}
+.profile-legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:9px;color:var(--muted);margin:4px 0 8px}
+.moment-readings{display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:8px}.moment-readings small{display:block;font-size:9px;color:var(--muted)}.moment-readings strong{display:block;font-size:11px;overflow-wrap:anywhere}
+.moment-readings>div:first-child{grid-column:span 2}
+.map-expanded{overflow-y:auto}.map-expanded .flight-analysis{flex-shrink:0}.map-expanded .flight-profile{height:150px}.map-expanded #map{min-height:160px}
+@media(max-width:600px){.flight-analysis{padding:10px}.flight-profile{height:160px}.moment-readings{grid-template-columns:repeat(3,minmax(0,1fr))}.map-expanded .flight-profile{height:130px}.map-expanded #map{flex:0 0 200px}}

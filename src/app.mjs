@@ -3,6 +3,8 @@ import { PMTiles, FileSource, Protocol } from 'pmtiles';
 import { scanFolder, createManualFlight, getSourceHandle } from './flights.mjs';
 import { setupDashboard } from './dashboard-ui.mjs';
 import { setupReview } from './review-ui.mjs';
+import {setupFlightAnalysis} from './flight-analysis-ui.mjs';
+import {fixTime,openRoute} from './flight-analysis.mjs';
 import { buildMapOverview, EMPTY_MAP_DATA } from './map-overview.mjs';
 import { createTerrain, terrainSources, terrainLayers, contourLabelData } from './terrain.mjs';
 import { trackRates, RATE_COLOR } from './track-rate.mjs';
@@ -20,6 +22,7 @@ let xcController = null, xcRefreshTimer = null, xcRevision = 0;
 let map = null, markers = [], busy = false, mapGeneration = 0;
 let dashboard = null;
 let review = null;
+let analysisUI=null;
 let editingManual = null;
 let terrain = null, terrainGeneration = 0, terrainApplyQueued = false;
 let terrainLabelSignature = '';
@@ -66,6 +69,8 @@ function baseStyle(archive = null, header = null) {
   sources.track = { type: 'geojson', data: trackData(), tolerance: 0, lineMetrics: true };
   sources['track-rate'] = { type: 'geojson', data: state.mapMode === 'single' ? selectedRates().data : EMPTY_MAP_DATA, tolerance: 0 };
   sources.density = { type: 'geojson', data: state.mapMode === 'heat' ? overviewData().density : EMPTY_MAP_DATA };
+  sources['xc-route']={type:'geojson',data:routeData()};
+  sources['analysis-cursor']={type:'geojson',data:cursorData()};
   layers.push({ id: 'flight-heatmap', type: 'heatmap', source: 'density', layout: { visibility: state.mapMode === 'heat' ? 'visible' : 'none' }, paint: {
     'heatmap-weight': ['get', 'flightCount'],
     'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 0, 0.02, 6, 0.08, 10, 0.45, 14, 1, 19, 2],
@@ -75,12 +80,27 @@ function baseStyle(archive = null, header = null) {
   } });
   layers.push({ id: 'track-halo', type: 'line', source: 'track', paint: { 'line-color': '#fff', 'line-width': 6, 'line-opacity': 0.85 } }, { id: 'track', type: 'line', source: 'track', paint: { 'line-color': '#b94e38', 'line-width': 3 }, layout: { 'line-cap': 'round', 'line-join': 'round' } });
   layers.push({ id: 'track-rate', type: 'line', source: 'track-rate', layout: { 'line-cap': 'round', 'line-join': 'round', visibility: state.mapMode === 'single' ? 'visible' : 'none' }, paint: { 'line-color': RATE_COLOR, 'line-width': 3 } });
+  layers.push({id:'xc-route-line',type:'line',source:'xc-route',filter:['==',['geometry-type'],'LineString'],paint:{'line-color':'#e49b13','line-width':3,'line-dasharray':[3,2]}},
+    {id:'xc-route-points',type:'circle',source:'xc-route',filter:['==',['geometry-type'],'Point'],paint:{'circle-radius':10,'circle-color':'#ffbf43','circle-stroke-width':2,'circle-stroke-color':'#583800'}},
+    {id:'xc-route-labels',type:'symbol',source:'xc-route',filter:['==',['geometry-type'],'Point'],layout:{'text-field':['get','label'],'text-font':['Flightbook'],'text-size':11,'text-allow-overlap':true},paint:{'text-color':'#362200'}},
+    {id:'xc-route-legs',type:'symbol',source:'xc-route',filter:['==',['geometry-type'],'LineString'],layout:{'symbol-placement':'line-center','text-field':['get','label'],'text-font':['Flightbook'],'text-size':11},paint:{'text-color':'#583800','text-halo-color':'#fff','text-halo-width':2}},
+    {id:'analysis-cursor',type:'circle',source:'analysis-cursor',paint:{'circle-radius':7,'circle-color':'#d529b0','circle-stroke-width':3,'circle-stroke-color':'#fff'}});
   return { version: 8, sources, layers, ...(state.threeD && terrain ? { terrain: { source: 'terrain-elevation', exaggeration: 1 } } : {}) };
 }
 
 function trackData() {
   if (state.mapMode !== 'single') return overviewData().tracks;
   return { type: 'FeatureCollection', features: state.selected?.points.length > 1 ? [{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: state.selected.points.map(point => [point.lon, point.lat]) } }] : [] };
+}
+function routeData(){return state.mapMode==='single'&&$('show-xc-route').checked?openRoute(state.selected):EMPTY_MAP_DATA;}
+function cursorData(){return state.selected&&state.mapMode==='single'&&state.cursor?{type:'FeatureCollection',features:[{type:'Feature',properties:{},geometry:{type:'Point',coordinates:[state.cursor.lon,state.cursor.lat]}}]}:EMPTY_MAP_DATA;}
+function updateAnalysisOverlays(){
+  if(!state.selected&&analysisUI?.rows.length)analysisUI.setFlight(null);
+  map?.getSource('xc-route')?.setData(routeData());map?.getSource('analysis-cursor')?.setData(cursorData());
+  const route=openRoute(state.selected),available=route.features.length>0;
+  $('show-xc-route').disabled=!available||state.mapMode!=='single';
+  $('xc-route-legs').textContent=available?`${state.selected.xc.open.optimal?'':'≈ '}Open XC: ${state.selected.xc.open.distanceKm.toFixed(2)} km · ${route.features.filter(f=>f.geometry.type==='LineString').map(f=>f.properties.label).join(' · ')} · S = optimized start, numbered turnpoints, F = optimized finish.`:state.selected?.type==='manual'?'Manual flights have no GPS route.':'Open XC route will appear when a positive-distance calculation is available.';
+  $('flight-analysis').hidden=state.mapMode!=='single';
 }
 
 function visibleFlights() {
@@ -128,6 +148,7 @@ function renderXCDetail() {
   refine.addEventListener('click', () => { xcController.refine(flight); renderXCDetail(); });
   const note = flight.type === 'manual' ? 'Open XC distance is manually entered. GPS track distance and triangle distances are unavailable.' : flight.xcError ? `XC error: ${flight.xcError}` : flight.points.length < 5 ? 'XC calculation needs at least five valid GPS fixes.' : 'XContest-style distance estimates over the recorded track, without contest multipliers. ≈ means the search time limit was reached. Refinement runs a longer search; official contest validation is separate.';
   target.replaceChildren(node('h3', 'Cross-country distances'), grid, node('p', note, 'muted'), refine);
+  updateAnalysisOverlays();
 }
 
 function updateXCStatus() {
@@ -165,6 +186,13 @@ function ensureMap() {
     map.on('load', drawFlight);
     map.on('style.load', () => { applyTerrain(); drawFlight(); });
     map.on('idle', updateTerrainLabels);
+    map.on('click',event=>{
+      if(state.mapMode!=='single'||!state.selected?.points.length)return;
+      const layers=['track-rate','track-halo','xc-route-points','xc-route-line'].filter(id=>map.getLayer(id));
+      const features=map.queryRenderedFeatures([[event.point.x-8,event.point.y-8],[event.point.x+8,event.point.y+8]],{layers});
+      const turnpoint=features.find(f=>f.layer.id==='xc-route-points'&&Number.isInteger(f.properties.index)&&f.properties.index>=0);
+      if(turnpoint)analysisUI?.select(turnpoint.properties.index);else if(features.length)analysisUI?.nearest(event.lngLat);
+    });
     return map;
   } catch (error) { $('map-status').textContent = `Map could not start: ${error.message}. Check that your browser supports WebGL.`; return null; }
 }
@@ -245,6 +273,7 @@ async function connectTerrain(file) {
     if (generation !== terrainGeneration) { next.dispose(); return; }
     if (!ensureMap()) { next.dispose(); throw new Error('WebGL map is unavailable'); }
     removeTerrainLayers(); terrain?.dispose(); terrain = next;
+    analysisUI?.terrainChanged();
     $('terrain-shading').disabled = false;
     $('terrain-contours').disabled = next.header.maxZoom < 11;
     if ($('terrain-contours').disabled) $('terrain-contours').checked = false;
@@ -260,6 +289,7 @@ async function connectTerrain(file) {
 }
 
 function drawFlight() {
+  updateAnalysisOverlays();
   if (!map || !map.getSource('track')) return;
   if (!map.getLayer('flight-3d')) map.addLayer(flight3DLayer(maplibre));
   map.getSource('track').setData(trackData());
@@ -314,6 +344,12 @@ function selectFlight(flight, inspect = false) {
     const cell = node('div', ''); cell.append(node('small', label), node('strong', String(value))); grid.append(cell);
   }
   $('flight-detail').append(heading, node('p', flight.path, 'path'), grid);
+  if(flight.type==='igc'){
+    const info=node('div','','detail-grid');
+    for(const [label,value]of [['Pilot',flight.pilot||'Not recorded'],['Glider registration',flight.registration||'Not recorded'],['First recorded fix',fixTime(flight,flight.points[0])],['Last recorded fix',fixTime(flight,flight.points.at(-1))],['Average recorded ground speed',flight.durationSeconds>0&&flight.points.length>1?`${(flight.distanceKm/flight.durationSeconds*3600).toFixed(1)} km/h`:'Unavailable']]){const cell=node('div');cell.append(node('small',label),node('strong',value));info.append(cell);}
+    $('flight-detail').append(info,node('p','Times are recorded fixes in UTC, not detected takeoff/landing. Average ground speed uses GPS track distance over the full recorded duration, including gaps and waiting.','muted'));
+  }
+  analysisUI?.setFlight(flight);
   if(flight.reviewExcluded)$('flight-detail').append(node('p','Excluded flight — individual preview only. Restore inclusion in Review to count it in totals and map overviews.','warning'));
   if(flight.type==='manual'&&flight.startTime)$('flight-detail').append(node('p',`Manual start: ${flight.date} ${flight.startTime}${flight.startTimeUtc?` · ${flight.startTimeUtc} UTC`:' · local time (no stored UTC offset)'}`,'muted'));
   const xcDetail = node('div', '', 'xc-detail'); xcDetail.id = 'xc-detail'; $('flight-detail').append(xcDetail); renderXCDetail();
@@ -428,6 +464,7 @@ document.addEventListener('keydown', event => {
   }
 });
 $('map-mode').addEventListener('change', () => { state.mapMode = $('map-mode').value; drawFlight(); fitTrack(); });
+$('show-xc-route').addEventListener('change',updateAnalysisOverlays);
 $('theme').addEventListener('click', () => { document.body.classList.toggle('dark'); $('theme').textContent = document.body.classList.contains('dark') ? 'Light theme' : 'Dark theme'; });
 function openManual(flight = null) {
   editingManual = flight; const form = $('manual-form'); form.reset(); $('save-status').textContent = '';
@@ -474,6 +511,7 @@ if (!window.isSecureContext || !('showDirectoryPicker' in window) || !('showSave
   $('folder').disabled = true; $('add-manual').disabled = true;
   setStatus('Folder access and direct saving are unavailable in this browser. Open dashboard.html in desktop Chrome or Edge. Map file selection remains available.');
 }
+analysisUI=setupFlightAnalysis(point=>{state.cursor=point;updateAnalysisOverlays();},()=>terrain);
 ensureMap();
 
 dashboard = setupDashboard(() => state.flights, change => change?.sortOnly ? renderFlights() : refreshLibrary(true), flight => selectFlight(flight, true), () => requestAnimationFrame(() => map?.resize()));
@@ -521,6 +559,10 @@ Object.defineProperty(window, 'flightbookDiagnostics', { get: () => ({
   selectedManualId: state.selected?.type === 'manual' ? state.selected.id : null,
   selectedPath: state.selected?.path || null,
   selectedFixes: state.selected?.points.length || 0,
+  analysisIndex:analysisUI?.index??0,
+  analysisCursor:state.cursor?{lon:state.cursor.lon,lat:state.cursor.lat,time:state.cursor.time}:null,
+  analysisMapCursor:map?.getSource('analysis-cursor')?.serialize()?.data?.features?.[0]?.geometry?.coordinates||null,
+  openRouteFeatures:routeData().features.length,
   trackCoordinates: map?.getSource('track')?.serialize()?.data?.features?.[0]?.geometry?.coordinates.length || 0,
   zoom: map?.getZoom() || 0,
   mapLoaded: map?.loaded() || false,

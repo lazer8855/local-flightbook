@@ -20,7 +20,8 @@ export function calculateXC(points, budgetMs = 75) {
       gapKm: info?.cp?.d ?? null,
       perimeterKm: info?.distance ?? null,
       legsKm: info?.legs?.map(leg => leg.d) || [],
-      turnpoints: info?.tp?.map(p => ({ lon: p.x, lat: p.y, index: p.r })) || []
+      turnpoints: info?.tp?.map(p => ({ lon: p.x, lat: p.y, index: p.r })) || [],
+      routePoints: key==='open'&&info?.ep ? [info.ep.start,...info.tp,info.ep.finish].map(p=>({lon:p.x,lat:p.y,index:p.r})) : []
     };
   }
   return result;

@@ -38,7 +38,7 @@ export function parseIGC(text, path = '') {
   if (unorderedFixes) warnings.push(`${unorderedFixes} out-of-order timestamps skipped`);
   let distanceKm = 0;
   for (let i = 1; i < points.length; i++) distanceKm += haversine(points[i - 1], points[i]);
-  return { type: 'igc', path, date, durationSeconds, site: header('SITE').replace(/^Unknown$/i, ''), wing: header('GLIDERTYPE'), points, distanceKm, invalidFixes, warnings };
+  return { type: 'igc', path, date, durationSeconds, site: header('SITE').replace(/^Unknown$/i, ''), pilot:header('PILOTINCHARGE')||header('PILOT'),registration:header('GLIDERID'), wing: header('GLIDERTYPE'), points, distanceKm, invalidFixes, warnings };
 }
 
 export function validDate(value) {

@@ -17,6 +17,21 @@ Machine-readable results are in `validation/chrome.json` and
 
 ## Confirmed behaviour
 
+- Individual flight analysis: all 54 unit tests pass. New cases cover ground
+  speed/climb readings, recording gaps, nearest-time selection, midnight rollover,
+  optimized Open XC endpoints/legs, terrain coverage, bilinear interpolation,
+  missing elevation and pilot/registration headers. The archive regression now
+  checks the original 431 IGC recordings separately from manual JSON entries
+  subsequently added to that archive; private files were not modified.
+- Offline Chrome/Edge flight-analysis checks verify profile/slider interaction,
+  exact source-coordinate cursor synchronization, map-click selection, metadata,
+  UTC midnight rollover, route toggle, real Alps terrain sampling, approximate
+  AGL arithmetic, unknown readings outside coverage, world-terrain replacement,
+  manual-flight fallback, full-window/3D use, mobile dark layout and empty filters.
+  Existing Review and Statistics UI checks pass as well. No HTTP requests or
+  console errors were reported. Run `npm run test:flight-analysis`; reports are
+  `validation/chrome-flight-analysis.json` and `validation/edge-flight-analysis.json`.
+
 - Expandable statistics update: all 49 existing unit tests pass. Offline Chrome
   155.0.8059.84 and Edge 155.0.4283.45 checks exercise all 14 expandable cards,
   full-window dimensions, keyboard focus containment, Escape/Close and focus

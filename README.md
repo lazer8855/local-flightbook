@@ -258,7 +258,38 @@ discarding them. Invalid review files and external changes are protected from
 overwrite. Review identities use relative file paths plus content hashes for
 IGC or IDs for manual entries; renamed/moved files must be reviewed again.
 
-## Shared dashboard and statistics
+## Inspect an individual IGC flight
+
+Below the map, **Flight analysis** shows GPS altitude (blue), recorded barometric
+altitude (orange, when present), and a grey approximate terrain profile when a
+local elevation archive is loaded. Hover or drag along the profile, use the
+keyboard-accessible recorded-time slider, or click the map track/route to select
+a recorded GPS fix. The pink map cursor follows the selected ground position;
+it remains a ground marker in 3D. Analysis is available in the map's full-window
+view and hides in All tracks/Heatmap mode. Manual flights have no GPS profile.
+
+The readings show recorded UTC time, GPS/barometric altitude, ten-second smoothed
+climb/sink rate and GPS ground speed. Recording gaps over 30 seconds are not
+connected in the profile; speeds across these gaps stay unknown. Flight details
+also show pilot and glider registration when present, first/last recorded fix
+times, and average recorded ground speed. These fix times are not automatically
+detected takeoff/landing times; averages include the entire recording span.
+
+**Open XC route** overlays the optimized start (S), numbered turnpoints, finish
+(F) and each scored leg's distance on the original track. It updates as local
+calculations/refinement finish and can be toggled independently. Time-limited
+results remain approximate. The route is a ground overlay in 3D and is unavailable
+for manual flights or recordings without a calculated positive Open XC distance.
+
+Terrain elevations are sampled locally from the chosen archive, at up to zoom
+12 (or the archive's lower maximum). The profile uses at most 256 terrain samples;
+the selected fix can obtain its own terrain reading. Outside coverage or missing
+tiles stay unknown. Approximate AGL is GPS altitude minus sampled ground elevation:
+coarse terrain, GPS noise and vertical-datum differences affect it and can produce
+negative values. It is not a clearance measurement. Replacing a terrain archive
+clears old readings and recalculates the profile. No runtime network access is used.
+
+## Shared statistics views
 
 Every statistics card has an **⤢ Expand** control, including summary cells,
 activity/calendar charts, cumulative graphs, personal bests and the advanced

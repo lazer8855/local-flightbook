@@ -45,7 +45,7 @@ export async function createTerrain(file, maplibre) {
   };
   maplibre.addProtocol(rasterProtocol, protocol('raster'));
   maplibre.addProtocol(contourProtocol, protocol('contours'));
-  return { file, header, dispose, rasterURL: `${rasterProtocol}://{z}/{x}/{y}`, contourURL: `${contourProtocol}://{z}/{x}/{y}` };
+  return { file, header, dispose, sample:(points,signal)=>request('sample',{points:points.map(p=>({lon:p.lon,lat:p.lat}))},signal), rasterURL: `${rasterProtocol}://{z}/{x}/{y}`, contourURL: `${contourProtocol}://{z}/{x}/{y}` };
 }
 
 export function terrainSources(terrain) {

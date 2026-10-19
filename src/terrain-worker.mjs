@@ -1,5 +1,6 @@
 import { PMTiles, FileSource } from 'pmtiles';
 import contour from 'maplibre-contour';
+import {terrainAddress,sampleDem} from './terrain-sampling.mjs';
 
 let archive, manager, header;
 const controllers = new Map();
@@ -34,6 +35,15 @@ self.onmessage = async ({ data: message }) => {
       const tile = await archive.getZxy(message.z, message.x, message.y, controller.signal);
       if (!tile) throw new Error('Terrain tile is missing from the selected archive');
       result = { data: tile.data };
+    } else if(type==='sample'){
+      result=[];
+      for(const point of message.points){
+        if(controller.signal.aborted)throw new DOMException('Cancelled','AbortError');
+        const address=terrainAddress(point,header);
+        if(!address){result.push(null);continue;}
+        const tile=await manager.fetchAndParseTile(address.z,address.x,address.y,controller);
+        result.push(sampleDem(tile,address));
+      }
     } else if (type === 'contours') {
       const tile = await manager.fetchContourTile(message.z, message.x, message.y, { levels: [100, 500], contourLayer: 'contours', elevationKey: 'ele', levelKey: 'level', extent: 4096, buffer: 1, subsampleBelow: 100 }, controller);
       result = { data: tile.arrayBuffer };

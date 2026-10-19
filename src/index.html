@@ -63,7 +63,19 @@
       <div id="rate-legend" class="rate-legend" hidden><div><span>Sink −3 m/s</span><i></i><span>Climb +3 m/s</span></div><small id="rate-source"></small></div>
       <div class="terrain-controls"><label><input id="terrain-shading" type="checkbox" checked disabled> Terrain shading</label><label><input id="terrain-contours" type="checkbox" checked disabled> Contours</label></div>
       <p id="terrain-status" class="map-caption" role="status">Optional: choose terrain-alps.pmtiles for detailed Alpine terrain and contours, or terrain-world.pmtiles for worldwide shading and 3D. Reselect it after reopening.</p>
-      <div id="map"></div><p id="map-status" class="map-caption">Connect a local .pmtiles map for the background. Tracks can be viewed without it.</p><div id="flight-detail" class="flight-detail"><p class="muted">Select a flight to see its track and recording details.</p></div>
+      <div id="map"></div>
+<section id="flight-analysis" class="flight-analysis" aria-label="Selected flight analysis">
+  <div class="analysis-heading"><h3>Flight analysis</h3><label><input id="show-xc-route" type="checkbox" checked disabled> Open XC route</label></div>
+  <p id="xc-route-legs" class="muted"></p>
+  <p id="flight-analysis-empty" class="muted">Select an IGC recording to inspect its altitude profile. Manual flights have no GPS profile.</p>
+  <div id="flight-analysis-data" hidden>
+    <div id="flight-profile" class="flight-profile"></div>
+    <label class="timeline-label">Recorded time (UTC) — hover or drag the profile, use arrow keys on the slider, or click the track<input id="flight-timeline" type="range" min="0" max="0" step="1" value="0" disabled aria-label="Inspect recorded GPS fix"></label>
+    <div class="profile-legend"><span>Blue: GPS altitude</span><span>Orange: barometric altitude</span><span>Grey: approximate terrain</span><span>Pink cursor: selected ground position (also in 3D)</span></div>
+    <div class="moment-readings"><div><small>Recorded time</small><strong id="moment-time"></strong></div><div><small>GPS altitude</small><strong id="moment-gps"></strong></div><div><small>Barometric altitude</small><strong id="moment-baro"></strong></div><div><small>Climb / sink</small><strong id="moment-climb"></strong></div><div><small>Ground speed</small><strong id="moment-speed"></strong></div><div><small>Approx. ground elevation</small><strong id="moment-ground"></strong></div><div><small>Approx. height above ground</small><strong id="moment-agl"></strong></div></div>
+    <p id="moment-climb-source" class="muted"></p><p id="profile-terrain-status" class="muted"></p>
+  </div>
+</section><p id="map-status" class="map-caption">Connect a local .pmtiles map for the background. Tracks can be viewed without it.</p><div id="flight-detail" class="flight-detail"><p class="muted">Select a flight to see its track and recording details.</p></div>
     </div></section>
     <details class="panel review-panel"><summary id="review-summary">Import details and review</summary><div id="issues"></div></details>
     <footer>Prototype validation · GPS track length and XC distance are shown separately. XC estimates use XContest-style geometry; no official contest validation. Recorded time includes any waiting captured by the logger.</footer>
