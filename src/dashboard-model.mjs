@@ -1,8 +1,9 @@
 import { validDate } from './flights.mjs';
 import { filterFlights } from './flight-filters.mjs';
+import {scoredXC} from './xc-scoring.mjs';
 
 export const DEFAULT_FILTERS = { search: '', from: '', to: '', year: null, month: null, mode: 'all', minMinutes: null, maxMinutes: null, minKm: null, maxKm: null, hideShort: false, sort: 'date', xcType: 'open', error: '' };
-export const DASHBOARD_METRICS = { durationSeconds: 'Recorded airtime', count: 'Flights', openXcKm: 'Open XC distance', flyingDays: 'Flying days' };
+export const DASHBOARD_METRICS = { durationSeconds: 'Recorded airtime', count: 'Flights', openXcKm: 'Scored XC distance', flyingDays: 'Flying days' };
 export const dateISO = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 export const addDays = (date, n) => new Date(Date.parse(`${date}T12:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
 const mean = values => { const known = values.filter(Number.isFinite); return known.length ? known.reduce((a,b) => a+b,0)/known.length : null; };
@@ -24,9 +25,7 @@ export function shiftYear(date, year) {
   return `${year}-${String(month).padStart(2,'0')}-${String(Math.min(day,Number(monthEnd(year,month).slice(8)))).padStart(2,'0')}`;
 }
 export function openXC(flight) {
-  if (flight.type === 'manual') return Number.isFinite(flight.openXcDistanceKm) && flight.openXcDistanceKm >= 0 ? { distanceKm:flight.openXcDistanceKm, source:'manual', approximate:false } : null;
-  const value = flight.xc?.open;
-  return Number.isFinite(value?.distanceKm) && value.distanceKm >= 0 ? { ...value,source:'calculated',approximate:!value.optimal } : null;
+  return scoredXC(flight);
 }
 export function summary(flights) {
   let distance = 0, calculated = 0, manual = 0, approximate = 0;
@@ -44,7 +43,7 @@ export function validateFilters(filters) {
   if (filters.from && filters.to && filters.from > filters.to) return 'From date must not be after To date.';
   for (const key of ['minMinutes','maxMinutes','minKm','maxKm']) if (filters[key] !== null && filters[key] !== undefined && (!Number.isFinite(filters[key]) || filters[key] < 0)) return 'Enter finite, non-negative duration and distance values.';
   if (filters.minMinutes !== null && filters.maxMinutes !== null && filters.minMinutes > filters.maxMinutes) return 'Minimum duration must not exceed maximum duration.';
-  if (filters.minKm !== null && filters.maxKm !== null && filters.minKm > filters.maxKm) return 'Minimum Open XC distance must not exceed maximum distance.';
+  if (filters.minKm !== null && filters.maxKm !== null && filters.minKm > filters.maxKm) return 'Minimum Scored XC distance must not exceed maximum distance.';
   return '';
 }
 export function daysBetween(from,to) {

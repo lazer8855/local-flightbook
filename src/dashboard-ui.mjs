@@ -21,7 +21,7 @@ const barValue=(key,value)=>{
 };
 const coverageText=s=>`${s.coverage.calculated} calculated · ${s.coverage.manual} manual · ${s.coverage.unavailable} unavailable${s.coverage.approximate?' · includes estimates':''}`;
 const distanceText=s=>`${s.coverage.approximate?'≈ ':''}${metricText('openXcKm',s.openXcKm)}`;
-const sourceText=f=>f.type==='manual'?'Manual':openXC(f)?.approximate?'Calculated estimate':'Calculated';
+const sourceText=f=>{const value=openXC(f);return f.type==='manual'?'Manual open route':value?`${value.label} · ${value.points.toFixed(2)} estimated points`:'Unknown';};
 
 export function setupDashboard(getFlights,onChange,onInspect,onViewChange) {
   let filters={...DEFAULT_FILTERS}, view='flightbook',model=buildDashboard([]);
@@ -37,7 +37,7 @@ export function setupDashboard(getFlights,onChange,onInspect,onViewChange) {
       if(invalid)patch.error='Enter finite, non-negative duration and distance values.';
     }
     if(patch.minMinutes!==null&&patch.maxMinutes!==null&&patch.minMinutes>patch.maxMinutes)patch.error='Minimum duration must not exceed maximum duration.';
-    if(patch.minKm!==null&&patch.maxKm!==null&&patch.minKm>patch.maxKm)patch.error='Minimum Open XC distance must not exceed maximum distance.';
+    if(patch.minKm!==null&&patch.maxKm!==null&&patch.minKm>patch.maxKm)patch.error='Minimum Scored XC distance must not exceed maximum distance.';
     patch.hideShort=$('hide-short').checked;set(patch);
   }
   for(const id of Object.keys(inputMap))$(id).addEventListener('input',readInputs);
@@ -84,7 +84,7 @@ export function setupDashboard(getFlights,onChange,onInspect,onViewChange) {
     const chip=(text,patch)=>{const b=node('button',`${text} ×`,'filter-chip');b.type='button';b.setAttribute('aria-label',`Remove ${text} filter`);b.addEventListener('click',()=>set(patch));chips.append(b);};
     if(filters.mode!=='all')chip(dateTitle(),shortcutDates('all'));
     if(filters.search)chip(`Search: ${filters.search}`,{search:''});
-    for(const [key,label,unit]of [['minMinutes','Duration ≥','min'],['maxMinutes','Duration ≤','min'],['minKm','Open XC ≥','km'],['maxKm','Open XC ≤','km']])if(filters[key]!==null)chip(`${label} ${filters[key]} ${unit}`,{[key]:null,error:''});
+    for(const [key,label,unit]of [['minMinutes','Duration ≥','min'],['maxMinutes','Duration ≤','min'],['minKm','Scored XC ≥','km'],['maxKm','Scored XC ≤','km']])if(filters[key]!==null)chip(`${label} ${filters[key]} ${unit}`,{[key]:null,error:''});
     if(filters.hideShort)chip('Hide recordings < 1 min',{hideShort:false});
   }
   function comparisonText(key){
@@ -96,10 +96,10 @@ export function setupDashboard(getFlights,onChange,onInspect,onViewChange) {
   function renderSummary(){
     const s=model.summary;
     $('compact-airtime').textContent=timeText(s.durationSeconds);
-    $('compact-totals').textContent=`${s.count} flights · ${s.flyingDays} flying days · ${distanceText(s)} Open XC`;
+    $('compact-totals').textContent=`${s.count} flights · ${s.flyingDays} flying days · ${distanceText(s)} Scored XC`;
     $('compact-average').textContent=`Average flight: ${timeText(s.averageSeconds)}`;
     $('compact-coverage').textContent=coverageText(s);
-    for(const [key,label]of [['count','Flights'],['durationSeconds','Recorded airtime'],['averageSeconds','Average flight duration'],['openXcKm','Open XC distance']]){
+    for(const [key,label]of [['count','Flights'],['durationSeconds','Recorded airtime'],['averageSeconds','Average flight duration'],['openXcKm','Scored XC distance']]){
       let card=summaryCards.get(key);
       if(!card){card=node('article','','summary-cell');summaryCards.set(key,card);$('statistics-cards').append(card);}
       const expand=card.querySelector('.stat-expand-button');card.replaceChildren();card.append(node('small',label),node('strong',key==='openXcKm'?distanceText(s):metricText(key,s[key])),node('p',comparisonText(key),'stat-comparison'));
@@ -107,7 +107,7 @@ export function setupDashboard(getFlights,onChange,onInspect,onViewChange) {
       if(expand)card.append(expand);
     }
     $('statistics-context').textContent=`${s.flyingDays} flying days · ${s.count} matching flights${model.undated?` · ${model.undated} undated flights included only in totals`:''}`;
-    const notice=model.singleYear?`Comparisons use the same calendar dates and non-date filters. Average references: ${model.referenceYears.join(', ')||'none'}; the selected year and current calendar year are excluded. Current-year comparisons stop at today. Each reference year has equal weight. Unknown Open XC is excluded from distance averages; an empty matching period contributes zero.`:'All time and multi-year graphs show chronological totals. Select a single-year period for previous-year and other-year average comparisons.';
+    const notice=model.singleYear?`Comparisons use the same calendar dates and non-date filters. Average references: ${model.referenceYears.join(', ')||'none'}; the selected year and current calendar year are excluded. Current-year comparisons stop at today. Each reference year has equal weight. Unknown Scored XC is excluded from distance averages; an empty matching period contributes zero.`:'All time and multi-year graphs show chronological totals. Select a single-year period for previous-year and other-year average comparisons.';
     $('statistics-note').textContent=notice;
     $('statistics-empty').hidden=s.count>0;$('statistics-empty').textContent=getFlights().length?'No flights match this selection. Adjust or clear filters.':'Connect a flight folder to get started.';
   }
@@ -175,7 +175,7 @@ export function setupDashboard(getFlights,onChange,onInspect,onViewChange) {
       for(const day of calendar.days){
         const b=node('button','','calendar-day');b.type='button';b.dataset.focusKey=`day-${day.date}`;b.disabled=day.outside||day.future;
         const level=day.durationSeconds?Math.max(1,Math.ceil(day.durationSeconds/max*4)):0;b.dataset.level=level;b.classList.toggle('future',day.future);b.classList.toggle('outside',day.outside);
-        const text=`${day.date}: ${timeText(day.durationSeconds)}, ${day.count} flights, ${distanceText(day)} Open XC${day.coverage.manual?' · Manual distance included':''}${day.outside?' · outside selection':''}${day.future?' · future date':''}`;
+        const text=`${day.date}: ${timeText(day.durationSeconds)}, ${day.count} flights, ${distanceText(day)} Scored XC${day.coverage.manual?' · Manual distance included':''}${day.outside?' · outside selection':''}${day.future?' · future date':''}`;
         b.title=text;b.setAttribute('aria-label',text);b.addEventListener('focus',()=>$('calendar-tooltip').textContent=text);b.addEventListener('pointerenter',()=>$('calendar-tooltip').textContent=text);
         b.addEventListener('click',()=>set({from:day.date,to:day.date,year:null,month:null,mode:'custom'}));grid.append(b);
       }
@@ -210,11 +210,11 @@ export function setupDashboard(getFlights,onChange,onInspect,onViewChange) {
     lineChart($('progress-time'),'durationSeconds');lineChart($('progress-xc'),'openXcKm');
     $('progress-legend').textContent=model.singleYear?`Selected · Previous year${model.previous?'':' (unavailable)'} · Other-year average${model.referenceYears.length?'':' (unavailable)'}`:'Chronological totals · select a single-year period for reference lines';
     $('progress-coverage').textContent=coverageText(model.summary);
-    if([model.progress.selected,model.progress.previous,model.progress.average].some(rows=>rows?.some(row=>row.approximate))) $('progress-coverage').textContent+=' · Open XC reference curves may also include estimates';
+    if([model.progress.selected,model.progress.previous,model.progress.average].some(rows=>rows?.some(row=>row.approximate))) $('progress-coverage').textContent+=' · Scored XC reference curves may also include estimates';
   }
   function renderRecords(){
     const host=$('personal-bests');host.replaceChildren();
-    for(const [key,label]of [['duration','Longest recorded airtime'],['distance','Longest Open XC distance']]){
+    for(const [key,label]of [['duration','Longest recorded airtime'],['distance','Longest Scored XC distance']]){
       const flight=model.best[key],button=node('button','','record-row');button.type='button';button.dataset.focusKey=`record-${key}`;button.disabled=!flight;
       const value=flight?(key==='duration'?timeText(flight.durationSeconds):`${openXC(flight).approximate?'≈ ':''}${number(openXC(flight).distanceKm)} km · ${sourceText(flight)}`):'Unavailable';
       button.append(node('strong',label),node('span',value),node('small',flight?`${flight.date||'Undated'} · ${flight.site||'Unnamed site'} →`:''));
@@ -228,7 +228,7 @@ export function setupDashboard(getFlights,onChange,onInspect,onViewChange) {
     }
     $('advanced-coverage').textContent=`Distance plots include ${model.summary.coverage.known} of ${model.summary.count} flights. ${coverageText(model.summary)}.`;
     const host=$('xc-scatter');host.replaceChildren();
-    const svg=svgNode('svg',{viewBox:'0 0 640 280',role:'group','aria-label':'Recorded airtime versus Open XC distance; points open flights'});
+    const svg=svgNode('svg',{viewBox:'0 0 640 280',role:'group','aria-label':'Recorded airtime versus Scored XC distance; points open flights'});
     const maxX=Math.max(1,...model.scatter.map(p=>p.minutes)),maxY=Math.max(1,...model.scatter.map(p=>p.distanceKm));
     svg.append(svgNode('line',{x1:70,x2:620,y1:220,y2:220,class:'plot-grid'}),svgNode('line',{x1:70,x2:70,y1:20,y2:220,class:'plot-grid'}));
     for(let i=0;i<=4;i++){
@@ -236,7 +236,7 @@ export function setupDashboard(getFlights,onChange,onInspect,onViewChange) {
       const y=svgNode('text',{x:60,y:225-i/4*200,'text-anchor':'end',class:'plot-label'});y.textContent=number(maxY*i/4);svg.append(y);
     }
     const xlabel=svgNode('text',{x:345,y:270,'text-anchor':'middle',class:'plot-label'});xlabel.textContent='Recorded airtime (minutes)';svg.append(xlabel);
-    const ylabel=svgNode('text',{x:10,y:15,class:'plot-label'});ylabel.textContent='Open XC (km)';svg.append(ylabel);
+    const ylabel=svgNode('text',{x:10,y:15,class:'plot-label'});ylabel.textContent='Scored XC (km)';svg.append(ylabel);
     for(const point of model.scatter){
       const title=`${point.flight.date||'Undated'} · ${point.flight.site||'Unnamed site'}: ${timeText(point.flight.durationSeconds)}, ${point.approximate?'≈ ':''}${number(point.distanceKm)} km · ${sourceText(point.flight)}`;
       const circle=svgNode('circle',{cx:70+point.minutes/maxX*550,cy:220-point.distanceKm/maxY*200,r:5,class:`scatter-point ${point.source}`,tabindex:0,role:'button','aria-label':title,'data-focus-key':`scatter-${point.flight.key||point.flight.path}`});const tip=svgNode('title');tip.textContent=title;circle.append(tip);

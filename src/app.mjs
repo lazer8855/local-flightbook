@@ -10,14 +10,17 @@ import { createTerrain, terrainSources, terrainLayers, contourLabelData } from '
 import { trackRates, RATE_COLOR } from './track-rate.mjs';
 import { flight3DLayer } from './flight-3d.mjs';
 import { startXC } from './xc-controller.mjs';
-import { XC_TYPES } from './xc-types.mjs';
+import {scoredXC,XC_RULES_VERSION,XC_CATEGORIES} from './xc-scoring.mjs';
+import {createXCDatabaseStore,attachXC,missingXC,xcHash,XC_DATABASE_FILE} from './xc-database.mjs';
 
 const $ = id => document.getElementById(id);
 const state = { directory: null, flights: [], issues: [], selected: null, archive: null, bounds: null };
 state.mapMode = 'single';
 state.threeD = false;
 let overviewCache = null;
-const xcCache = new Map();
+const xcStore=createXCDatabaseStore();
+let xcPreparing=false,xcSaving=false,xcSaveError='',xcProgress={completed:0,total:0},xcSaveChain=Promise.resolve(),xcBatch=0;
+const unfinishedXC=flight=>flight.type==='igc'&&flight.xc&&!Object.keys(XC_CATEGORIES).every(key=>flight.xc[key]?.optimal);
 let xcController = null, xcRefreshTimer = null, xcRevision = 0;
 let map = null, markers = [], busy = false, mapGeneration = 0;
 let dashboard = null;
@@ -99,7 +102,8 @@ function updateAnalysisOverlays(){
   map?.getSource('xc-route')?.setData(routeData());map?.getSource('analysis-cursor')?.setData(cursorData());
   const route=openRoute(state.selected),available=route.features.length>0;
   $('show-xc-route').disabled=!available||state.mapMode!=='single';
-  $('xc-route-legs').textContent=available?`${state.selected.xc.open.optimal?'':'≈ '}Open XC: ${state.selected.xc.open.distanceKm.toFixed(2)} km · ${route.features.filter(f=>f.geometry.type==='LineString').map(f=>f.properties.label).join(' · ')} · S = optimized start, numbered turnpoints, F = optimized finish.`:state.selected?.type==='manual'?'Manual flights have no GPS route.':'Open XC route will appear when a positive-distance calculation is available.';
+  const winning=scoredXC(state.selected);
+  $('xc-route-legs').textContent=available?`${winning.approximate?'≈ ':''}${winning.label}: ${winning.distanceKm.toFixed(2)} km · ${winning.points.toFixed(2)} estimated points · ${route.features.filter(f=>f.geometry.type==='LineString').map(f=>f.properties.label).join(' · ')} · Numbered turnpoints; S/F mark optimized endpoints for open/straight routes.`:state.selected?.type==='manual'?'Manual flights have no GPS route.':'Scored XC route appears after you calculate missing XC scores.';
   $('flight-analysis').hidden=state.mapMode!=='single';
 }
 
@@ -125,37 +129,51 @@ function refreshLibrary(fit = false) {
   } else if (state.mapMode !== 'single') { drawFlight(); if (fit) fitTrack(); }
 }
 
-function xcText(value) {
-  if (!value) return 'Calculating…';
-  if (value.distanceKm === null) return 'Not found yet · refine';
-  if (!value.distanceKm && value.optimal) return 'No qualifying route';
-  return `${value.source === 'manual' ? 'Manual · ' : value.optimal ? '' : '≈ '}${value.distanceKm.toFixed(2)} km`;
-}
-
 function renderXCDetail() {
   const target = $('xc-detail'), flight = state.selected;
   if (!target || !flight) return;
-  const grid = node('div', '', 'detail-grid');
-  for (const [key, label] of Object.entries(XC_TYPES)) {
-    const cell = node('div', '');
-    cell.append(node('small', label), node('strong', flight.type === 'manual' ? key === 'open' && flight.xc?.open ? xcText(flight.xc.open) : 'Unavailable' : flight.points.length < 5 ? 'Unavailable' : flight.xcError ? 'Calculation failed' : xcText(flight.xc?.[key])));
-    const value = flight.xc?.[key];
-    if (value?.gapKm !== null && value?.gapKm !== undefined) cell.append(node('small', `Closing gap ${value.gapKm.toFixed(2)} km, subtracted`));
-    grid.append(cell);
-  }
-  const refine = node('button', xcController?.refining === flight ? 'Refining…' : 'Refine XC distances', 'secondary');
-  refine.type = 'button'; refine.disabled = flight.points.length < 5 || !xcController || xcController.refining === flight;
-  refine.addEventListener('click', () => { xcController.refine(flight); renderXCDetail(); });
-  const note = flight.type === 'manual' ? 'Open XC distance is manually entered. GPS track distance and triangle distances are unavailable.' : flight.xcError ? `XC error: ${flight.xcError}` : flight.points.length < 5 ? 'XC calculation needs at least five valid GPS fixes.' : 'XContest-style distance estimates over the recorded track, without contest multipliers. ≈ means the search time limit was reached. Refinement runs a longer search; official contest validation is separate.';
-  target.replaceChildren(node('h3', 'Cross-country distances'), grid, node('p', note, 'muted'), refine);
+  const value=scoredXC(flight),grid=node('div','','detail-grid');
+  for(const [label,text]of [['Scored XC distance',value?`${value.approximate?'≈ ':''}${value.distanceKm.toFixed(2)} km`:'Unknown — calculate missing scores'],['Route',value?.label||'Unavailable'],['Estimated geometry points',value?.points==null?(flight.type==='manual'?'Unavailable (manual distance)':'Not calculated'):`${value.points.toFixed(2)}${value.approximate?' ≈':''}`]]){const cell=node('div');cell.append(node('small',label),node('strong',text));grid.append(cell);}
+  if(value?.gapKm!=null)grid.append(node('p',`Closing gap ${value.gapKm.toFixed(2)} km, subtracted`));
+  const refine=node('button','Refine this XC score','secondary');refine.type='button';refine.disabled=!!xcController||xcPreparing||xcSaving||flight.points.length<5||!unfinishedXC(flight)||xcStore.blocked;
+  refine.addEventListener('click',()=>calculateXCFlights([flight],5000));
+  const note=flight.type==='manual'?'Manually entered open-route distance; no triangle or official points are inferred.':flight.points.length<5?'XC calculation needs at least five valid GPS fixes.':`${XC_RULES_VERSION}: highest points among open, straight, flat triangle and FAI triangle. ≈ means one or more searches remain time-limited.${value&&!value.eligibleDistance?' Below the 10 km CCC final-ranking minimum.':''} Local geometry estimates only; no flight trimming, airspace, licence or contest validation.${flight.xcError?` Last attempt: ${flight.xcError}`:''}`;
+  target.replaceChildren(node('h3','Scored XC result'),grid,node('p',note,'muted'),refine);
   updateAnalysisOverlays();
 }
 
 function updateXCStatus() {
-  const eligible = state.flights.filter(f => f.points.length >= 5), complete = eligible.filter(f => f.xc || f.xcError).length;
-  const failed = eligible.filter(f => f.xcError).length;
-  $('xc-status').textContent = !state.flights.length ? 'XC distances are calculated locally after loading flights.' : `XC calculations: ${complete} of ${eligible.length} tracks processed${xcController?.pending ? ` · ${xcController.pending} queued or calculating` : ' · complete'}${failed ? ` · ${failed} failed; select a flight to retry refinement` : ''}. Manual Open XC values contribute when entered.`;
+  const missing=missingXC(xcStore.db,state.flights),running=!!xcController||xcPreparing;
+  $('calculate-xc').textContent=`Calculate missing XC scores (${missing.length})`;
+  $('calculate-xc').disabled=!state.directory||running||xcSaving||!missing.length||xcStore.blocked;
+  $('refine-xc').disabled=running||xcSaving||xcStore.blocked||!state.flights.some(unfinishedXC);
+  $('cancel-xc').disabled=!xcController;$('save-xc').disabled=!xcStore.dirty||running||xcSaving||xcStore.blocked;
+  $('xc-progress').max=xcProgress.total||1;$('xc-progress').value=xcProgress.completed;
+  $('xc-status').textContent=`${state.flights.filter(f=>f.type==='igc'&&f.xc).length} recordings with saved/cached candidates · ${missing.length} distinct recordings pending.${xcPreparing?' Waiting for folder write permission…':xcController?` Calculating ${xcProgress.completed}/${xcProgress.total}${xcProgress.active?` · ${xcProgress.active.path}`:''}.`:''}${xcSaving?' Saving database…':''}${xcStore.dirty?' Completed results need saving.':''}${xcSaveError?` ${xcSaveError}`:''} Import never starts calculations. Manual open-route values remain manual.`;
+  $('folder').disabled=busy||running||xcSaving||!('showDirectoryPicker'in window);$('rescan').disabled=busy||running||xcSaving||!state.directory;
 }
+function saveXC(){
+  xcSaveChain=xcSaveChain.catch(()=>{}).then(async()=>{xcSaving=true;updateXCStatus();try{await xcStore.save();xcSaveError='';}catch(error){xcSaveError=`Save failed: ${error.message}`;throw error;}finally{xcSaving=false;updateXCStatus();}});return xcSaveChain;
+}
+async function calculateXCFlights(queue,budgetMs=1000){
+  if(xcController||xcPreparing||!queue.length)return;
+  xcPreparing=true;xcSaveError='';updateXCStatus();renderXCDetail();
+  try{
+    await xcStore.permission();if(xcStore.dirty)await saveXC();xcBatch=0;xcProgress={completed:0,total:queue.length};
+    xcController=startXC(queue,async(flight,result,budget,last)=>{
+      const candidates=xcStore.record(flight,result,budget);for(const other of state.flights)if(other.type==='igc'&&xcHash(other)===xcHash(flight)){other.xc=candidates;delete other.xcError;}onXCUpdate(state.selected?.type==='igc'&&xcHash(state.selected)===xcHash(flight)?state.selected:flight);
+      xcBatch++;if(xcBatch>=5||last){await saveXC();xcBatch=0;}
+    },progress=>{xcProgress=progress;updateXCStatus();},()=>{
+      xcController=null;updateXCStatus();renderXCDetail();
+      if(xcStore.dirty&&!xcSaveError)saveXC().catch(()=>{});
+    },budgetMs);
+  }catch(error){xcSaveError=error.message;}finally{xcPreparing=false;updateXCStatus();renderXCDetail();}
+}
+$('calculate-xc').addEventListener('click',()=>calculateXCFlights(missingXC(xcStore.db,state.flights)));
+$('refine-xc').addEventListener('click',()=>{const seen=new Set();calculateXCFlights(state.flights.filter(f=>{const key=xcHash(f);if(!unfinishedXC(f)||seen.has(key))return false;seen.add(key);return true;}),5000);});
+$('cancel-xc').addEventListener('click',()=>xcController?.stop());
+$('save-xc').addEventListener('click',async()=>{try{await xcStore.permission();await saveXC();}catch(error){xcSaveError=error.message;updateXCStatus();}});
+window.addEventListener('beforeunload',event=>{if(xcStore.dirty||xcController){event.preventDefault();event.returnValue='';}});
 
 function onXCUpdate(flight) {
   xcRevision++;
@@ -372,7 +390,8 @@ function renderFlights() {
     const button = node('button', '', `flight-item${state.selected === flight ? ' selected' : ''}`);
     button.type = 'button'; button.setAttribute('aria-pressed', String(state.selected === flight));
     button.append(node('strong', `${flight.date || 'Undated'} · ${duration(flight.durationSeconds)}`), node('small', `${flight.site || 'Unnamed site'} · ${flight.type === 'manual' ? 'Manual' : 'IGC'}`), node('small', flight.path));
-    if (flight.points.length >= 5 || flight.xc?.open) button.append(node('small', `Open XC: ${flight.xcError ? 'Unavailable' : xcText(flight.xc?.open)}`));
+    const scored=scoredXC(flight);
+    if(flight.points.length>=5||scored)button.append(node('small',scored?`${scored.approximate?'≈ ':''}Scored XC: ${scored.distanceKm.toFixed(2)} km · ${scored.label}${scored.points==null?'':` · ${scored.points.toFixed(2)} estimated points`}`:'Scored XC: not calculated'));
     if ((flight.reviewWarnings||flight.warnings).length) button.append(node('small', 'Needs review', 'warning'));
     button.addEventListener('click', () => selectFlight(flight, true)); fragment.append(button);
   }
@@ -388,14 +407,15 @@ function renderImportIssues(){
   $('review-summary').textContent=`Import details and review (${warnings.length+state.issues.length})`;
 }
 async function rescan() {
-  if (!state.directory || busy) return;
+  if (!state.directory || busy || xcController || xcPreparing || xcSaving) return;
   busy = true; $('folder').disabled = true; $('rescan').disabled = true;
   xcController?.stop(); xcController = null; clearTimeout(xcRefreshTimer); xcRefreshTimer = null;
   try {
     const result = await scanFolder(state.directory, count => setStatus(`Scanning… ${count} candidate files read.`));
     state.flights = result.flights; state.issues = result.issues;
+    try{await xcStore.load(state.directory);xcSaveError='';}catch(error){xcSaveError=`Could not load ${XC_DATABASE_FILE}: ${error.message}. File will not be overwritten.`;}
+    attachXC(xcStore.db,state.flights);
     await review?.load();
-    for (const flight of state.flights) if (xcCache.has(flight.key)) flight.xc = xcCache.get(flight.key);
     dashboard?.refresh();
     const selectedKey = state.selected?.key;
     state.selected = null;
@@ -410,14 +430,16 @@ async function rescan() {
     const selection = eligible.find(flight => flight.key === selectedKey) || eligible.find(flight => flight.points.length > 1) || eligible[0];
     if (selection) selectFlight(selection);
     else { drawFlight(); $('fit').disabled = true; $('flight-detail').replaceChildren(node('p', 'No flight selected.', 'muted')); }
-    xcController = startXC(state.flights, xcCache, onXCUpdate, state.selected); updateXCStatus(); renderXCDetail();
+    updateXCStatus();renderXCDetail();
   } catch (error) { setStatus(`Could not read the folder: ${error.message}. Click Choose flight folder to reconnect and approve access.`); }
   finally { busy = false; $('folder').disabled = !('showDirectoryPicker' in window); $('rescan').disabled = !state.directory; }
 }
 
 $('folder').addEventListener('click', async () => {
+  if(xcController||xcPreparing||xcSaving)return;
+  if(xcStore.dirty&&!window.confirm('Unsaved XC results will be discarded when reconnecting. Save the database first to retain them. Continue?'))return;
   if(review?.dirty&&!window.confirm('Unsaved review decisions will be discarded when reconnecting a folder. Continue?'))return;
-  try { state.directory = await window.showDirectoryPicker({ mode: 'read' }); review?.reconnect(); dashboard?.reset(); await rescan(); }
+  try { state.directory = await window.showDirectoryPicker({ mode: 'read' }); xcStore.reset();review?.reconnect(); dashboard?.reset(); await rescan(); }
   catch (error) { setStatus(cancelled(error) ? 'Folder selection cancelled or access not granted. Click Choose flight folder to retry.' : `Folder access failed: ${error.message}. Retry in desktop Chrome or Edge.`); }
 });
 $('rescan').addEventListener('click', rescan);
@@ -467,6 +489,7 @@ $('map-mode').addEventListener('change', () => { state.mapMode = $('map-mode').v
 $('show-xc-route').addEventListener('change',updateAnalysisOverlays);
 $('theme').addEventListener('click', () => { document.body.classList.toggle('dark'); $('theme').textContent = document.body.classList.contains('dark') ? 'Light theme' : 'Dark theme'; });
 function openManual(flight = null) {
+  if(xcController||xcPreparing||xcSaving){setStatus('Cancel the XC calculation before editing manual flights.');return;}
   editingManual = flight; const form = $('manual-form'); form.reset(); $('save-status').textContent = '';
   $('manual-title').textContent = flight ? 'Edit manual flight' : 'Add a manual flight';
   $('manual-help').textContent = flight ? 'Choose the original JSON file to update it and keep its ID. Choosing another file creates a copy with a new ID. IGC files cannot be overwritten.' : 'Save a flightbook JSON file inside your connected flight folder. Open XC distance is optional; blank means unavailable, zero means zero kilometres.';
@@ -489,6 +512,7 @@ $('manual-form').addEventListener('submit', async event => {
     if (/\.igc$/i.test(handle.name)) throw new Error('IGC files cannot be overwritten. Select a .json file.');
     if (!/\.json$/i.test(handle.name)) throw new Error('Choose a .json filename.');
     if(handle.name.toLowerCase()==='flightbook-review.json')throw new Error('This filename is reserved for review decisions. Choose another JSON file.');
+    if(handle.name.toLowerCase()===XC_DATABASE_FILE)throw new Error('This filename is reserved for the XC database. Choose another JSON file.');
     if(editingManual?.startTimeUtc&&flight.date===editingManual.date&&flight.startTime===editingManual.startTime)flight.startTimeUtc=editingManual.startTimeUtc;
     if (originalHandle && await handle.isSameEntry(originalHandle)) flight.id = editingManual.id;
     const writable = await handle.createWritable();
@@ -522,11 +546,14 @@ Object.defineProperty(window, 'flightbookDiagnostics', { get: () => ({
   flightCount: state.flights.length,
   filteredFlights: visibleFlights().length,
   libraryFilters: libraryFilters(),
-  xcProcessed: state.flights.filter(f => f.xc).length,
+  xcProcessed: state.flights.filter(f => f.type==='igc'&&f.xc).length,
   xcErrors: state.flights.filter(f => f.xcError).map(f => ({ path: f.path, message: f.xcError })),
   xcEligible: state.flights.filter(f => f.points.length >= 5).length,
   xcPending: xcController?.pending || 0,
   selectedXC: state.selected?.xc || null,
+  selectedScoredXC:scoredXC(state.selected),
+  xcDatabaseDirty:xcStore.dirty,
+  xcDatabaseEntries:Object.keys(xcStore.db.entries).length,
   selectedDuration: state.selected?.durationSeconds ?? null,
   mapExpanded: expanded,
   threeD: state.threeD,

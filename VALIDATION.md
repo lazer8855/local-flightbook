@@ -17,6 +17,29 @@ Machine-readable results are in `validation/chrome.json` and
 
 ## Confirmed behaviour
 
+- Explicit persisted XC update: 59 unit tests pass. Swiss CCC geometry scoring
+  selects the highest-point open/straight/flat/FAI route; tests cover a shorter
+  winning triangle, straight-route endpoints, shared summaries/filters, closing
+  gaps, monotonic refinement, content-hash identity and schema/version handling.
+  Loading never starts XC work. Compatible candidates can be rescored without
+  repeating geometry searches; changed geometry versions become pending.
+- Offline Chrome/Edge controlled checks use real bundled worker calculations
+  and verify no automatic jobs, duplicate deduplication, permission denial/retry,
+  cancellation flushing completed work, failed-write retry, saved reopening,
+  renamed/changed files, orphan-result retention, highest-scoring triangle/map
+  selection, external-change protection and invalid-file protection. Reports:
+  `validation/*-xc-database.json`; run `npm run test:xc-database`.
+- Native Chrome/Edge checks exercise actual folder-write prompts and root
+  `flightbook-xc.json` creation in isolated scratch directories. Two byte-identical
+  IGC files create one database entry/job; reopening restores both without any
+  XC worker jobs. Original IGC bytes are unchanged. Reports:
+  `validation/xc-native-*.json`; run `npm run test:xc-native`.
+- Flight-analysis, Review and Statistics browser checks pass with the new
+  scoring workflow and no HTTP requests or console errors. The broad archive
+  integration script now uses a scratch IGC-only snapshot and verifies that
+  importing all 431 recordings does not automatically calculate or write XC
+  results; calculation/persistence is covered by the dedicated suites above.
+
 - Individual flight analysis: all 54 unit tests pass. New cases cover ground
   speed/climb readings, recording gaps, nearest-time selection, midnight rollover,
   optimized Open XC endpoints/legs, terrain coverage, bilinear interpolation,

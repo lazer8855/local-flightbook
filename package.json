@@ -10,6 +10,8 @@
     "test:statistics-ui": "node scripts/validate-statistics-ui.mjs",
     "test:statistics-cards": "node scripts/validate-statistics-cards.mjs",
     "test:flight-analysis": "node scripts/validate-flight-analysis.mjs",
+    "test:xc-database": "node scripts/validate-xc-database.mjs",
+    "test:xc-native": "node scripts/validate-xc-native.mjs",
     "test:review-ui": "node scripts/validate-review-ui.mjs",
     "test:review-native": "node scripts/validate-review-native.mjs"
   },

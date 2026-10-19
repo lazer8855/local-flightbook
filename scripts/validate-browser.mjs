@@ -11,7 +11,12 @@ await mkdir('validation/artifacts', { recursive: true });
 const fixtureRoot = resolve('.cache', `manual-fixture-${label}-${Date.now()}`);
 const fixtureFolder = join(fixtureRoot, 'Flüge ü', 'Site without date');
 await mkdir(fixtureFolder, { recursive: true });
-const archiveFolder = resolve((await readdir('.', { withFileTypes: true })).find(entry => entry.isDirectory() && entry.name.startsWith('skytraxx')).name);
+const sourceArchive = resolve((await readdir('.', { withFileTypes: true })).find(entry => entry.isDirectory() && entry.name.startsWith('skytraxx')).name);
+const archiveFolder=resolve('.cache',`archive-fixture-${label}-${Date.now()}`);
+// Keep the archive check reproducible after users add manual JSON, and never
+// write calculation/review metadata into their actual flight folder.
+async function copyRecordings(source,destination){await mkdir(destination,{recursive:true});for(const entry of await readdir(source,{withFileTypes:true})){if(entry.isDirectory())await copyRecordings(join(source,entry.name),join(destination,entry.name));else if(/\.igc$/i.test(entry.name))await copyFile(join(source,entry.name),join(destination,entry.name));}}
+await copyRecordings(sourceArchive,archiveFolder);
 async function findIGC(folder) {
   for (const entry of await readdir(folder, { withFileTypes: true })) {
     const path = join(folder, entry.name);
@@ -77,12 +82,9 @@ try {
   assert.equal(await page.locator('#flight-count').textContent(), '431');
   checks.suppliedFlights = 431;
   assert.equal((await diagnostics()).statisticsSummary.count, 431);
-  await page.waitForFunction(() => window.flightbookDiagnostics.selectedXC?.open?.distanceKm > 0, null, { timeout: 30000 });
-  assert.match(await page.locator('#xc-detail').textContent(), /Open XC|Free triangle|FAI triangle/);
-  const initialXC = (await diagnostics()).selectedXC.open.distanceKm;
-  await page.locator('#xc-detail button').click();
-  await page.waitForFunction(() => document.querySelector('#xc-detail button').textContent !== 'Refining…', null, { timeout: 15000 });
-  assert.ok((await diagnostics()).selectedXC.open.distanceKm >= initialXC);
+  assert.equal((await diagnostics()).xcProcessed,0);
+  assert.equal((await diagnostics()).xcPending,0);
+  assert.match(await page.locator('#xc-detail').textContent(),/Unknown|calculate missing/i);
   await page.locator('#filter-toggle').click();
   await page.locator('#duration-min').fill('60');
   assert.ok((await diagnostics()).filteredFlights > 0 && (await diagnostics()).filteredFlights < 431);
@@ -98,8 +100,7 @@ try {
   assert.equal((await diagnostics()).zoom,zoomBeforeSort);
   assert.ok((await page.locator('.flight-item').first().textContent()).includes('5h'));
   await page.locator('#xc-min').fill('1');
-  assert.ok((await diagnostics()).filteredFlights > 0 && (await diagnostics()).filteredFlights < 431);
-  assert.ok((await diagnostics()).selectedXC.open.distanceKm >= 1);
+  assert.equal((await diagnostics()).filteredFlights,0); // Uncalculated distance is unknown, not zero.
   await page.locator('#map-mode').selectOption('tracks');
   assert.equal((await diagnostics()).overviewFlights, (await diagnostics()).filteredFlights);
   await page.locator('#map-mode').selectOption('heat');
@@ -240,9 +241,9 @@ try {
   await page.locator('#search').fill('2018'); assert.ok(await page.locator('.flight-item').count() > 0); await page.locator('#search').fill('');
   await page.waitForFunction(() => window.flightbookDiagnostics.xcPending === 0, null, { timeout: 120000 });
   const xcArchive = await diagnostics();
-  assert.equal(xcArchive.xcProcessed, xcArchive.xcEligible);
+  assert.equal(xcArchive.xcProcessed,0);
   assert.deepEqual(xcArchive.xcErrors, []);
-  checks.xcArchive = { eligible: xcArchive.xcEligible, processed: xcArchive.xcProcessed, errors: xcArchive.xcErrors };
+  checks.xcArchive = { eligible: xcArchive.xcEligible, processed: xcArchive.xcProcessed, noAutomaticCalculation:true, errors: xcArchive.xcErrors };
   await chooseFolder(fixtureRoot);
   await page.waitForFunction(() => window.flightbookDiagnostics.selectedPath?.includes('sample.IGC'));
   await page.locator('#add-manual').click();

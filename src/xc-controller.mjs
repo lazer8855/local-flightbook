@@ -1,51 +1,24 @@
-export function startXC(flights, cache, onUpdate, preferred) {
-  const workerURL = URL.createObjectURL(new Blob([XC_WORKER], { type: 'text/javascript' }));
-  let worker, active = null, watchdog, stopped = false;
-  const queue = [];
-  for (const flight of flights) {
-    if (flight.points.length < 5) continue;
-    if (cache.has(flight.key)) flight.xc = cache.get(flight.key);
-    else queue.push({ flight, budgetMs: 75 });
+// One worker job per distinct file. Await persistence between batches so a save
+// failure stops the queue without losing already completed geometry in memory.
+export function startXC(flights,onResult,onProgress,onFinish,budgetMs=1000){
+  const url=URL.createObjectURL(new Blob([XC_WORKER],{type:'text/javascript'})),worker=new Worker(url);
+  let cursor=0,completed=0,active=null,stopped=false,timer;
+  function finish(){if(stopped)return;stopped=true;clearTimeout(timer);worker.terminate();URL.revokeObjectURL(url);onFinish?.();}
+  function next(){
+    if(stopped)return;
+    if(cursor>=flights.length){finish();return;}
+    active=flights[cursor++];onProgress?.({completed,total:flights.length,active});
+    timer=setTimeout(()=>{active.xcError='Calculation timed out; completed results were preserved.';finish();},Math.max(30000,budgetMs*10+10000));
+    worker.postMessage({key:active.key,points:active.points,budgetMs,previous:active.xc||{}});
   }
-  if (preferred) queue.sort((a, b) => Number(b.flight === preferred) - Number(a.flight === preferred));
-  function launchWorker() {
-    worker = new Worker(workerURL);
-    worker.onmessage = ({ data }) => {
-      if (!active || data.key !== active.flight.key) return;
-      clearTimeout(watchdog);
-      const flight = active.flight;
-      if (data.error) flight.xcError = data.error;
-      else {
-        const old = flight.xc;
-        flight.xc = Object.fromEntries(Object.entries(data.result || {}).map(([key, value]) => [key, old?.[key] && (old[key].optimal || (old[key].distanceKm ?? -1) > (value.distanceKm ?? -1)) ? old[key] : value]));
-        delete flight.xcError; cache.set(flight.key, flight.xc);
-      }
-      active = null; onUpdate(flight); next();
-    };
-    worker.onerror = event => fail(event.message || 'XC worker could not start');
-  }
-  function fail(message) {
-    clearTimeout(watchdog); worker.terminate(); worker = null;
-    if (active) { active.flight.xcError = message; const flight = active.flight; active = null; onUpdate(flight); }
-    if (!stopped && queue.length) next();
-  }
-  function next() {
-    if (stopped || active || !queue.length) return;
-    if (!worker) launchWorker();
-    active = queue.shift();
-    watchdog = setTimeout(() => fail('XC calculation timed out. Select the flight and retry refinement.'), 15000);
-    worker.postMessage({ key: active.flight.key, points: active.flight.points, budgetMs: active.budgetMs });
-  }
-  launchWorker(); next();
-  return {
-    refine(flight) {
-      if (!flight || flight.points.length < 5 || active?.flight === flight && active.budgetMs > 75) return;
-      const index = queue.findIndex(job => job.flight === flight);
-      if (index >= 0) queue.splice(index, 1);
-      queue.unshift({ flight, budgetMs: 2000 }); next();
-    },
-    get pending() { return queue.length + Number(!!active); },
-    get refining() { return active?.budgetMs > 75 ? active.flight : queue.find(job => job.budgetMs > 75)?.flight || null; },
-    stop() { stopped = true; clearTimeout(watchdog); worker?.terminate(); URL.revokeObjectURL(workerURL); }
+  worker.onmessage=async({data})=>{
+    if(stopped||data.key!==active?.key)return;clearTimeout(timer);
+    const flight=active;
+    if(data.error)flight.xcError=data.error;
+    else{try{await onResult(flight,data.result,budgetMs,completed+1===flights.length);}catch(error){flight.xcError=`Save failed: ${error.message}`;finish();return;}}
+    completed++;onProgress?.({completed,total:flights.length,active:null});next();
   };
+  worker.onerror=event=>{if(active)active.xcError=event.message||'XC worker failed';finish();};
+  next();
+  return {get pending(){return Math.max(0,flights.length-completed);},get completed(){return completed;},stop:finish};
 }

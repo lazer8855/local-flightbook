@@ -15,18 +15,21 @@ for(const [label,executablePath]of [['chrome','C:/Program Files/Google/Chrome/Ap
     return `B${clock}${coord(46.72+i*.001,true)}${coord(lon+i*.003,false)}A${String(1600+i*10).padStart(5,'0')}${String(1650+i*11).padStart(5,'0')}`;
    }).join('\n');}
    const files=new Map([['inside.igc',track(7.7)],['outside.igc',track(80)],['manual.json',JSON.stringify({format:'local-flightbook',version:1,id:'manual',date:'2024-05-01',durationSeconds:600})]]);
-   window.showDirectoryPicker=async()=>({name:'Flight analysis fixtures',async *entries(){for(const [name,text]of files)yield [name,{kind:'file',name,getFile:async()=>new File([text],name)}];}});
+   const handle=name=>({kind:'file',name,getFile:async()=>new File([files.get(name)||''],name),createWritable:async()=>{let value;return{write:async text=>{value=text;},close:async()=>files.set(name,value),abort:async()=>{}};}});
+   window.showDirectoryPicker=async()=>({name:'Flight analysis fixtures',requestPermission:async()=> 'granted',getFileHandle:async(name,options={})=>{if(!files.has(name)){if(!options.create)throw new DOMException('Missing','NotFoundError');files.set(name,'');}return handle(name);},async *entries(){for(const [name]of files)yield [name,handle(name)];}});
   });
   const page=await context.newPage(),errors=[],requests=[];
   page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});page.on('request',r=>{if(/^https?:/.test(r.url()))requests.push(r.url());});
   await page.goto(pathToFileURL(resolve('dashboard.html')).href);await page.locator('#folder').click();
   await page.waitForFunction(()=>window.flightbookDiagnostics.flightCount===3);
+  assert.equal(await page.evaluate(()=>window.flightbookDiagnostics.xcProcessed),0);
+  await page.locator('#calculate-xc').click();
   await page.waitForFunction(()=>window.flightbookDiagnostics.selectedXC?.open?.routePoints?.length>0);
   assert.match(await page.locator('#flight-detail').textContent(),/Analysis Pilot/);assert.match(await page.locator('#flight-detail').textContent(),/CH-TEST/);
   assert.match(await page.locator('#flight-detail').textContent(),/2024-06-02 00:02:40 UTC/);
   assert.equal(await page.locator('#flight-profile .profile-gps').count(),1);assert.equal(await page.locator('#flight-profile .profile-baro').count(),1);
   assert.equal(await page.locator('#moment-ground').textContent(),'Unavailable');assert.equal(await page.locator('#show-xc-route').isEnabled(),true);
-  assert.equal(await page.evaluate(()=>window.flightbookDiagnostics.openRouteFeatures),9);
+  assert.equal(await page.evaluate(()=>window.flightbookDiagnostics.openRouteFeatures),3);
   await page.locator('#show-xc-route').uncheck();assert.equal(await page.evaluate(()=>window.flightbookDiagnostics.openRouteFeatures),0);await page.locator('#show-xc-route').check();
   await page.locator('#flight-timeline').focus();await page.keyboard.press('End');
   assert.equal(await page.evaluate(()=>window.flightbookDiagnostics.analysisIndex),11);assert.match(await page.locator('#moment-time').textContent(),/2024-06-02 00:02:40 UTC/);

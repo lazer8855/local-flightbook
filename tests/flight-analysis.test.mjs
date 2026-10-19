@@ -20,10 +20,10 @@ test('UTC fix times cross midnight correctly and nearest-time selection handles 
   assert.equal(nearestTime(points,86300),0);assert.equal(nearestTime(points,86417),1);assert.equal(nearestTime(points,99999),2);assert.equal(nearestTime([],0),-1);
   const indices=sampleIndices(5000,256);assert.equal(indices.length,256);assert.equal(indices[0],0);assert.equal(indices.at(-1),4999);
 });
-test('Open XC overlay includes actual optimized endpoints and every scored leg',()=>{
+test('winning XC overlay includes actual optimized endpoints and every scored leg',()=>{
   const points=Array.from({length:10},(_,i)=>({lon:8+i*.01,lat:47,time:i*10,gpsAltitude:1000,pressureAltitude:1000}));
   const xc=calculateXC(points,500),route=openRoute({xc});
-  assert.equal(xc.open.routePoints.length,5);assert.equal(route.features.filter(f=>f.geometry.type==='LineString').length,4);
+  assert.equal(xc.open.routePoints.length,5);assert.equal(route.features.filter(f=>f.geometry.type==='LineString').length,1);
   const vertices=route.features.filter(f=>f.geometry.type==='Point');assert.equal(vertices[0].properties.label,'S');assert.equal(vertices.at(-1).properties.label,'F');
   for(const p of xc.open.routePoints){assert.equal(points[p.index].lon,p.lon);assert.equal(points[p.index].lat,p.lat);}
   assert.ok(Math.abs(xc.open.legsKm.reduce((a,b)=>a+b,0)-xc.open.distanceKm)<.02);

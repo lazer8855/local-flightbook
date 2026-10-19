@@ -12,7 +12,7 @@ test('duration ranges include boundaries and combine with search and XC ranges',
   assert.deepEqual(filterFlights(flights,{minMinutes:10,maxMinutes:60,minKm:5,maxKm:40,search:'2021'}).map(f=>f.path),['b']);
   assert.equal(filterFlights(flights,{minMinutes:40,maxMinutes:10}).length,0);
 });
-test('XC type changes the range; pending/manual are unknown rather than zero', () => {
+test('legacy XC type cannot change the winning-distance filter; pending values remain unknown', () => {
   assert.deepEqual(filterFlights(flights,{xcType:'triangle',minKm:10}).map(f=>f.path),['b']);
   assert.deepEqual(filterFlights(flights,{minKm:0,maxKm:10}).map(f=>f.path),['a']);
   assert.equal(filterFlights(flights).length,4);

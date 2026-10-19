@@ -29,7 +29,7 @@ foreach ($window in $children) {
     "DIALOG: $($window.Current.Name)"
     $elements = $window.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)
     if ($Action -in @('allow','deny','overwrite')) {
-        $wanted = if ($Action -eq 'allow') { @('Zulassen','Allow','Allow access','Save','Speichern') } elseif ($Action -eq 'overwrite') { @('Ja','Yes','Ersetzen','Replace') } else { @('Nicht zulassen',"Don't allow",'Block') }
+        $wanted = if ($Action -eq 'allow') { @('Zulassen','Allow','Allow access','Save','Speichern',([string][char]0x00C4 + 'nderungen speichern'),'Save changes','Allow editing') } elseif ($Action -eq 'overwrite') { @('Ja','Yes','Ersetzen','Replace') } else { @('Nicht zulassen',"Don't allow",'Block') }
         $permissionButton = $elements | Where-Object { ($_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button -or $Action -eq 'overwrite') -and $_.Current.Name -in $wanted } | Select-Object -First 1
         if ($permissionButton) {
             $invokePattern = $null

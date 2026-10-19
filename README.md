@@ -275,11 +275,11 @@ also show pilot and glider registration when present, first/last recorded fix
 times, and average recorded ground speed. These fix times are not automatically
 detected takeoff/landing times; averages include the entire recording span.
 
-**Open XC route** overlays the optimized start (S), numbered turnpoints, finish
+**Scored XC route** overlays the winning optimized start (S), numbered turnpoints, finish
 (F) and each scored leg's distance on the original track. It updates as local
 calculations/refinement finish and can be toggled independently. Time-limited
 results remain approximate. The route is a ground overlay in 3D and is unavailable
-for manual flights or recordings without a calculated positive Open XC distance.
+for manual flights or recordings without a calculated positive scored XC distance.
 
 Terrain elevations are sampled locally from the chosen archive, at up to zoom
 12 (or the archive's lower maximum). The profile uses at most 256 terrain samples;
@@ -311,15 +311,15 @@ This redesign is included in beta 2 and the current source build.
 
 **Flightbook** presents a compact airtime summary, flight library and map.
 **Statistics** presents four equal cells for flights, recorded airtime, average
-flight duration and Open XC distance; flying days appear as supporting context.
+flight duration and scored XC distance; flying days appear as supporting context.
 Switching tabs preserves the shared filters and selected flight. Loading a folder
 starts at All time. Year/month choices, date shortcuts and inclusive custom dates
-combine with search, duration/Open XC ranges and the optional short-recording
+combine with search, duration/scored XC ranges and the optional short-recording
 filter. Active chips can be removed individually. Clear filters restores All time
 while preserving list sorting. All filters affect both views and all map modes.
 
 Two activity graphs default to recorded airtime and flight count; either can
-switch to Open XC or flying days. Bars use daily buckets for up to 31 days,
+switch to scored XC or flying days. Bars use daily buckets for up to 31 days,
 monthly buckets for longer ranges within a year, and annual buckets for All time
 or multi-year ranges. The daily calendar colours recorded airtime; selecting a
 day filters both views. Personal bests and scatter points open their flight
@@ -327,7 +327,7 @@ without clearing filters. Expand **Advanced statistics** for duration/XC bands
 and the airtime-versus-XC scatter plot. Wing/site and altitude/climb statistics
 are not part of this update.
 
-The two cumulative graphs show recorded airtime and available Open XC. Within
+The two cumulative graphs show recorded airtime and available scored XC. Within
 one calendar year they compare with the same dates one year earlier, and an
 equally weighted average of other recorded years before the current calendar
 year. The selected and current years are excluded from average references.
@@ -339,7 +339,7 @@ empty matching periods in recorded years contribute zero counts/time. Unknown
 XC is excluded from distance averages. The archive may still be incomplete;
 the dashboard does not infer archive completeness.
 
-Open XC totals update while calculations run, with calculated/manual/unavailable
+Scored XC totals update while calculations run, with calculated/manual/unavailable
 coverage. Totals and records containing time-limited results show **≈**. Blank
 distance is never treated as zero. Undated flights contribute to unbounded
 selection totals and records, but not dated charts or calendars. Recorded
@@ -378,19 +378,68 @@ keep the supplied map archive. Map provenance is recorded in `map-manifest.json`
 Map sources and terms:
 [Protomaps basemaps](https://docs.protomaps.com/basemaps/downloads),
 [OpenStreetMap attribution](https://www.openstreetmap.org/copyright).
-## XC distances and flight filters
+## XC scoring, calculation and saved results
 
-Each IGC track with at least five valid fixes is scored locally in a bundled background worker using `igc-xc-score` 1.8.0. The dashboard shows **Open XC**, **Free triangle**, and **FAI triangle** separately from accumulated GPS track length. Open XC optimizes start, up to three turnpoints, and finish. Triangle scoring uses the XContest-style 20% closure limit, subtracts the closing gap, and applies the 28% minimum-leg rule for FAI triangles. Values are kilometres without contest multipliers. Distances use all valid fixes, WGS84/Vincenty calculations, and no automatic launch/landing trimming; waiting or driving in a recording can affect the result. See [XContest rules](https://www.xcontest.org/world/en/rules/).
+Loading/rescanning a folder reads saved XC results immediately and never starts
+XC calculations. Use **Calculate missing XC scores (N)** to process previously
+unseen recordings. Grant folder write permission when requested: results are
+saved in `flightbook-xc.json` in the selected root folder, every five completed
+files and when finishing or cancelling. IGC files and manual JSON remain untouched.
+The first pass can take time; subsequent loads reuse the database. Files need at
+least five valid fixes for calculation. Exact copies are calculated only once.
 
-Initial searches run for about 75 ms per discipline plus setup in a background worker. **≈** identifies a time-limited result; **Not found yet** means no qualifying route was found within the budget, not proof of its absence. **Refine XC distances** gives the selected flight up to two seconds per discipline; results never decrease. Even refined results may remain approximate and differ from an official contest result. Progress appears in the library. Results are cached by file-content hash for rescans during the session, and recomputed after reopening. Original files and GPS geometry are unchanged.
+The default reference is the pinned **Swiss CCC 2026 geometry rules**, applied
+consistently to all archive years. See [SHV Sportreglement D 2026, sections
+6.1–6.3](https://www.shv-fsvl.ch/fileadmin/files/redakteure/Allgemein/Sport/Reglemente/2026/Reglement_D_2026.pdf).
+The highest estimated points select **one route and its distance**:
 
-Shared numeric ranges are inclusive and use Open XC only. Pending, failed,
-insufficient-fix and manual-without-distance entries have unknown XC and are
-excluded whenever an XC range is active, including a minimum of zero. Manually
-entered distances participate in filters, totals, records and every distance
-graph. Triangle results remain in individual IGC flight details.
+| Candidate | Multiplier |
+| --- | --- |
+| Open route, up to three turnpoints | 1.0 |
+| Straight distance, furthest two recorded points | 1.2 |
+| Flat triangle | 1.2 |
+| FAI triangle | 1.4 |
 
-The XC worker and its LGPL dependency are bundled into `dashboard.html`; no external script or internet request is needed. Build sources, pinned dependencies, and notices are included in the project so the worker can be rebuilt or modified.
+Triangles use the 20% closure limit and subtract the closing gap. FAI triangles
+require each leg to be at least 28% of the perimeter. Points round to hundredths.
+World XContest's additional 5%-closure bonuses are not Swiss CCC multipliers and
+are not used. The 10 km CCC final-ranking minimum is identified in details;
+shorter flights retain their local geometry distance and estimated points for
+flightbook use. These are not official scores: trimming, engine use, airspace,
+licences, class and other eligibility checks are not performed.
+
+The winning distance drives filters, sorting, statistics, comparisons, charts,
+records and the map route. Details/list/records show its route type and estimated
+points. The map closes triangle routes and marks any subtracted closing gap.
+A shorter triangle can beat a longer open route; as searches improve, winning
+points cannot decrease, but the associated winning distance can change.
+
+Standard calculation allows roughly **1 second per candidate** plus preparation;
+**Refine estimated scores** (all unfinished results) or **Refine this XC score**
+allows roughly **5 seconds per unfinished candidate**. Proven optimal candidates
+are reused rather than searched again. A result remains **≈** until all candidate
+searches are proven optimal; an unknown route is not proof that it is absent.
+All original valid fixes are used; tracks are not simplified or automatically
+trimmed. Progress and **Cancel** remain available while the worker runs. Cancel
+keeps completed results; the interrupted file remains pending. During a run,
+folder changes and manual editing are temporarily disabled.
+
+The version-1 database is keyed by raw-file SHA-256, so renaming/moving an IGC
+reuses its result and changing its contents makes it a new calculation. Results
+for temporarily missing files remain in the database. Entries retain every
+candidate's distance, route/closure geometry, quality, budget and timestamp,
+along with algorithm/scoring versions and the winner. Scoring changes can rescore
+compatible saved candidates without expensive geometry searches; geometry-version
+changes mark entries as pending. Unknown XC stays unknown, rather than zero.
+Manual `openXcDistanceKm` values remain manually entered open routes, with no
+invented triangle or points, and participate in all distance summaries/graphs.
+
+Invalid databases are protected from overwrite. Saves check for external changes
+and retain completed results in memory on failure; use **Save XC database** to
+retry. The page warns before closing/reconnecting with unsaved results. Keep the
+database with the flight folder when moving/backing it up. Both the database and
+private flight files are excluded from Git. Bundled workers need no server or
+runtime internet access.
 
 ## Map inspection
 

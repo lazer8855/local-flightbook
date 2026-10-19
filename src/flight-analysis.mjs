@@ -1,5 +1,6 @@
 import {haversine} from './flights.mjs';
 import {trackRates} from './track-rate.mjs';
+import {scoredXC} from './xc-scoring.mjs';
 
 export function nearestTime(points,time){
   if(!points.length)return -1;
@@ -27,12 +28,15 @@ export function sampleIndices(length,limit=256){
   return Array.from({length:limit},(_,i)=>Math.round(i*(length-1)/(limit-1)));
 }
 export function openRoute(flight){
-  const xc=flight?.xc?.open;
+  const xc=scoredXC(flight);
   if(!xc||!Number.isFinite(xc.distanceKm)||xc.distanceKm<=0||!xc.routePoints?.length)return {type:'FeatureCollection',features:[]};
   const route=xc.routePoints.filter(p=>Number.isFinite(p.lon)&&Number.isFinite(p.lat));
   if(route.length<2)return {type:'FeatureCollection',features:[]};
   const features=[];
-  for(let i=1;i<route.length;i++)features.push({type:'Feature',properties:{label:`${i}: ${(xc.legsKm[i-1]??haversine(route[i-1],route[i])).toFixed(2)} km`},geometry:{type:'LineString',coordinates:[[route[i-1].lon,route[i-1].lat],[route[i].lon,route[i].lat]]}});
-  route.forEach((p,i)=>features.push({type:'Feature',properties:{label:i===0?'S':i===route.length-1?'F':String(i),index:p.index??-1},geometry:{type:'Point',coordinates:[p.lon,p.lat]}}));
+  const triangle=['triangle','fai'].includes(xc.type);
+  const line=triangle?[...route,route[0]]:route;
+  for(let i=1;i<line.length;i++)features.push({type:'Feature',properties:{label:`${i}: ${(xc.legsKm[i-1]??haversine(line[i-1],line[i])).toFixed(2)} km`},geometry:{type:'LineString',coordinates:[[line[i-1].lon,line[i-1].lat],[line[i].lon,line[i].lat]]}});
+  route.forEach((p,i)=>features.push({type:'Feature',properties:{label:triangle?String(i+1):i===0?'S':i===route.length-1?'F':String(i),index:p.index??-1},geometry:{type:'Point',coordinates:[p.lon,p.lat]}}));
+  if(triangle&&xc.closingPoints?.length===2)features.push({type:'Feature',properties:{label:`Closing gap: ${(xc.gapKm||0).toFixed(2)} km (subtracted)`,gap:true},geometry:{type:'LineString',coordinates:xc.closingPoints.map(p=>[p.lon,p.lat])}});
   return {type:'FeatureCollection',features};
 }
