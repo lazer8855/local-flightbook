@@ -1,5 +1,6 @@
 import { DEFAULT_FILTERS, DASHBOARD_METRICS, yearDates, shortcutDates, buildDashboard, openXC, validateFilters } from './dashboard-model.mjs';
 import { comparison, MONTHS } from './statistics.mjs';
+import { setupStatisticsCards } from './statistics-cards.mjs';
 
 const $=id=>document.getElementById(id);
 const node=(tag,text='',cls='')=>{const el=document.createElement(tag);el.textContent=text;el.className=cls;return el;};
@@ -13,12 +14,19 @@ export function timeText(seconds) {
 }
 const number=n=>Number.isFinite(n)?n.toLocaleString(undefined,{maximumFractionDigits:1}):'—';
 const metricText=(key,value)=>key==='durationSeconds'||key==='averageSeconds'?timeText(value):`${number(value)}${key==='openXcKm'?' km':''}`;
+const barValue=(key,value)=>{
+  if(key!=='durationSeconds'||!Number.isFinite(value))return metricText(key,value);
+  if(value<60)return `${Math.round(value)}s`;
+  const minutes=Math.round(value/60);return minutes<60?`${minutes}m`:`${Math.floor(minutes/60)}h${minutes%60?String(minutes%60).padStart(2,'0'):''}`;
+};
 const coverageText=s=>`${s.coverage.calculated} calculated · ${s.coverage.manual} manual · ${s.coverage.unavailable} unavailable${s.coverage.approximate?' · includes estimates':''}`;
 const distanceText=s=>`${s.coverage.approximate?'≈ ':''}${metricText('openXcKm',s.openXcKm)}`;
 const sourceText=f=>f.type==='manual'?'Manual':openXC(f)?.approximate?'Calculated estimate':'Calculated';
 
 export function setupDashboard(getFlights,onChange,onInspect,onViewChange) {
   let filters={...DEFAULT_FILTERS}, view='flightbook',model=buildDashboard([]);
+  const summaryCards=new Map();
+  const expandedCards=setupStatisticsCards(()=>layoutActivity());
   const inputMap={search:'search','duration-min':'minMinutes','duration-max':'maxMinutes','xc-min':'minKm','xc-max':'maxKm'};
   function set(patch,notify=true) {filters={...filters,...patch};filters.error=validateFilters(filters)||patch.error||'';render();if(notify)onChange({sortOnly:Object.keys(patch).length===1&&Object.hasOwn(patch,'sort')});}
   function readInputs(){
@@ -61,6 +69,7 @@ export function setupDashboard(getFlights,onChange,onInspect,onViewChange) {
     $(id).value=id.endsWith('1')?'durationSeconds':'count';$(id).addEventListener('change',renderActivity);
   }
   function chooseView(value){
+    if(value!=='statistics')expandedCards.close();
     view=value;
     $('flightbook-view').hidden=view!=='flightbook';$('statistics-view').hidden=view!=='statistics';$('review-view').hidden=view!=='review';
     document.querySelector('.shared-controls').hidden=view==='review';
@@ -90,11 +99,12 @@ export function setupDashboard(getFlights,onChange,onInspect,onViewChange) {
     $('compact-totals').textContent=`${s.count} flights · ${s.flyingDays} flying days · ${distanceText(s)} Open XC`;
     $('compact-average').textContent=`Average flight: ${timeText(s.averageSeconds)}`;
     $('compact-coverage').textContent=coverageText(s);
-    $('statistics-cards').replaceChildren();
     for(const [key,label]of [['count','Flights'],['durationSeconds','Recorded airtime'],['averageSeconds','Average flight duration'],['openXcKm','Open XC distance']]){
-      const card=node('article','','summary-cell');card.append(node('small',label),node('strong',key==='openXcKm'?distanceText(s):metricText(key,s[key])),node('p',comparisonText(key),'stat-comparison'));
+      let card=summaryCards.get(key);
+      if(!card){card=node('article','','summary-cell');summaryCards.set(key,card);$('statistics-cards').append(card);}
+      const expand=card.querySelector('.stat-expand-button');card.replaceChildren();card.append(node('small',label),node('strong',key==='openXcKm'?distanceText(s):metricText(key,s[key])),node('p',comparisonText(key),'stat-comparison'));
       if(key==='openXcKm')card.append(node('small',coverageText(s)));
-      $('statistics-cards').append(card);
+      if(expand)card.append(expand);
     }
     $('statistics-context').textContent=`${s.flyingDays} flying days · ${s.count} matching flights${model.undated?` · ${model.undated} undated flights included only in totals`:''}`;
     const notice=model.singleYear?`Comparisons use the same calendar dates and non-date filters. Average references: ${model.referenceYears.join(', ')||'none'}; the selected year and current calendar year are excluded. Current-year comparisons stop at today. Each reference year has equal weight. Unknown Open XC is excluded from distance averages; an empty matching period contributes zero.`:'All time and multi-year graphs show chronological totals. Select a single-year period for previous-year and other-year average comparisons.';
@@ -102,21 +112,58 @@ export function setupDashboard(getFlights,onChange,onInspect,onViewChange) {
     $('statistics-empty').hidden=s.count>0;$('statistics-empty').textContent=getFlights().length?'No flights match this selection. Adjust or clear filters.':'Connect a flight folder to get started.';
   }
   function renderActivity(){
+    const scrollPositions=new Map([1,2].map(i=>[i,$(`activity-chart-${i}`).querySelector('.activity-bars')?.scrollLeft||0]));
     for(let i=1;i<=2;i++){
       const key=$(`activity-metric-${i}`).value,host=$(`activity-chart-${i}`),max=Math.max(0,...model.buckets.map(b=>b[key]).filter(Number.isFinite));
+      const oldTip=host.dataset.metric===key?host.querySelector('.activity-tooltip')?.textContent:null;host.dataset.metric=key;
       host.replaceChildren();$(`activity-title-${i}`).textContent=`${DASHBOARD_METRICS[key]} by ${model.granularity}`;
       $(`activity-caption-${i}`).textContent=key==='openXcKm'?`Available distance only. ${coverageText(model.summary)}. Bars select dates.`:'Bars select dates. Hover or focus for exact values.';
       const bars=node('div','','activity-bars');bars.setAttribute('aria-label',`${DASHBOARD_METRICS[key]} by ${model.granularity}`);
+      bars.dataset.granularity=model.granularity;
+      const tooltip=node('p',oldTip||'Hover, tap or focus a bar for exact values.','activity-tooltip chart-tooltip');tooltip.setAttribute('role','status');
       for(const row of model.buckets){
         const button=node('button','','activity-column');button.type='button';button.dataset.focusKey=`activity-${i}-${row.key}`;const value=row[key],label=model.granularity==='month'?MONTHS[Number(row.key.slice(5))-1].slice(0,3):model.granularity==='day'?row.key.slice(8):row.key;
         const caption=row.noArchive?`${row.key}: no recorded year in the archive`:`${row.key}: ${metricText(key,value)}${key==='openXcKm'?`. ${coverageText(row)}`:''}`;button.title=caption;button.setAttribute('aria-label',caption);
-        const track=node('span','','column-track'),fill=node('span','','column-fill');fill.style.height=`${max&&Number.isFinite(value)?Math.max(2,value/max*100):0}%`;
-        track.append(fill);button.append(node('span',metricText(key,value),'column-value'),track,node('span',label,'column-label'));
+        const track=node('span','','column-track'),fill=node('span','','column-fill');
+        const fraction=max&&Number.isFinite(value)?Math.max(0,value/max):0;
+        button.style.setProperty('--bar-size',`${fraction*100}%`);
+        fill.append(node('span',barValue(key,value),'column-value'));
+        track.append(fill);button.append(track,node('span',label,'column-label'));
+        for(const event of ['focus','pointerenter','pointerdown'])button.addEventListener(event,()=>{tooltip.textContent=caption;});
         button.addEventListener('click',()=>{if(model.granularity==='year')set(yearDates(Number(row.key)));else if(model.granularity==='month')set(yearDates(Number(row.key.slice(0,4)),Number(row.key.slice(5))));else set({from:row.key,to:row.key,year:null,month:null,mode:'custom'});});bars.append(button);
       }
-      if(!model.buckets.length)host.append(node('p','No dated flights in this selection.','muted'));else host.append(bars);
+      if(!model.buckets.length)host.append(node('p','No dated flights in this selection.','muted'));else host.append(bars,tooltip);
+    }
+    layoutActivity();
+    for(const i of [1,2]){const bars=$(`activity-chart-${i}`).querySelector('.activity-bars');if(bars)bars.scrollLeft=scrollPositions.get(i);}
+    expandedCards.refresh();
+  }
+  function layoutActivity(){
+    for(const bars of document.querySelectorAll('.activity-bars')){
+      if(!bars.clientWidth)continue;
+      const count=bars.children.length,yearly=bars.dataset.granularity==='year';
+      const expanded=!!bars.closest('#statistics-full-window');
+      const horizontal=yearly&&expanded&&count>0&&bars.clientWidth/count<34;
+      const scrolling=yearly&&!expanded&&count>10;
+      bars.classList.toggle('scrolling-years',scrolling);
+      if(scrolling){const gap=parseFloat(getComputedStyle(bars).columnGap)||0;bars.style.setProperty('--year-bar-width',`${Math.max(1,(bars.clientWidth-gap*9)/10)}px`);}
+      bars.tabIndex=scrolling?0:-1;
+      bars.classList.toggle('horizontal-years',horizontal);
+      if(horizontal){
+        const dialog=bars.closest('#statistics-full-window'),rect=bars.getBoundingClientRect();
+        const available=dialog.clientHeight-(rect.top-dialog.getBoundingClientRect().top)-90;
+        bars.style.setProperty('--year-row-height',`${Math.max(12,Math.min(32,(available-(count-1)*2)/count))}px`);
+      }
+      bars.classList.toggle('compact-years',yearly&&!horizontal&&bars.clientWidth/Math.min(count,expanded?count:10)<66);
+      for(const value of bars.querySelectorAll('.column-value')){
+        value.classList.remove('value-fits');
+        const fill=value.parentElement;
+        if(fill.clientWidth>=value.scrollWidth+(horizontal?10:4)&&fill.clientHeight>=value.scrollHeight+(horizontal?2:10))value.classList.add('value-fits');
+      }
     }
   }
+  const activityObserver=new ResizeObserver(()=>layoutActivity());
+  for(const id of ['activity-chart-1','activity-chart-2'])activityObserver.observe($(id));
   function renderCalendars(){
     const host=$('activity-calendars'), expanded=new Map([...host.querySelectorAll('.calendar-year')].map(el=>[el.dataset.year,el.open]));host.replaceChildren();
     for(const [index,calendar]of model.calendars.entries()){
@@ -213,6 +260,7 @@ export function setupDashboard(getFlights,onChange,onInspect,onViewChange) {
     $('filter-summary').classList.toggle('filter-error',!!filters.error);
     renderChips();renderSummary();renderActivity();renderCalendars();renderProgress();renderRecords();
     if($('advanced-statistics').open)renderAdvanced();
+    expandedCards.refresh();
     if(focusKey){const element=[...document.querySelectorAll('[data-focus-key]')].find(el=>el.dataset.focusKey===focusKey);if(element&&!element.disabled)element.focus({preventScroll:true});}
   }
   $('advanced-statistics').addEventListener('toggle',()=>{if($('advanced-statistics').open)renderAdvanced();});

@@ -260,6 +260,22 @@ IGC or IDs for manual entries; renamed/moved files must be reviewed again.
 
 ## Shared dashboard and statistics
 
+Every statistics card has an **⤢ Expand** control, including summary cells,
+activity/calendar charts, cumulative graphs, personal bests and the advanced
+graphs. It fills the browser window without requiring browser fullscreen
+permission. Close with **Close (Esc)** or Escape; filters, selection and chart
+controls stay live, keyboard focus stays inside the dialog and returns to the
+expand button afterward.
+
+Yearly activity charts show at most ten years at once in the normal cards;
+scroll sideways for additional years. Expanded charts fit every year without
+horizontal scrolling, switching to horizontal rows when needed. Bar widths,
+spacing and row heights adapt to the available space. Closing an expanded card
+restores its normal scroll position. Values appear
+inside bars when they fit, with compact airtime labels such as `12h30` (12 hours,
+30 minutes). Hover, tap or keyboard focus exposes the exact full value, including
+for very small or zero bars. Selecting a bar still applies the shared date filter.
+
 This redesign is included in beta 2 and the current source build.
 
 **Flightbook** presents a compact airtime summary, flight library and map.

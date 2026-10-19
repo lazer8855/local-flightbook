@@ -17,6 +17,20 @@ Machine-readable results are in `validation/chrome.json` and
 
 ## Confirmed behaviour
 
+- Expandable statistics update: all 49 existing unit tests pass. Offline Chrome
+  155.0.8059.84 and Edge 155.0.4283.45 checks exercise all 14 expandable cards,
+  full-window dimensions, keyboard focus containment, Escape/Close and focus
+  restoration, advanced-section open-state preservation, live summary updates,
+  metric changes and date selection. A 32-year fixture verifies every annual
+  label fits without sideways scrolling in expanded cards, normal cards show
+  ten years with horizontal scrolling, scroll positions restore after closing,
+  and adaptive horizontal/vertical layouts,
+  in-bar value bounds, small-value fallbacks and mobile dark-theme layouts.
+  Existing statistics UI checks also pass. No HTTP requests or browser errors
+  were reported. Run `npm run test:statistics-cards`; reports and screenshots
+  are stored under `validation/*-statistics-cards.json` and
+  `validation/artifacts/*-statistics-expanded*.png`.
+
 - Review update: all 47 tests pass, including duplicate retention, UTC/local
   date boundaries, start-time tolerance, track similarity, separate short and
   suspicious findings, malformed records, review schema validation, reversible
